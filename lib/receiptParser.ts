@@ -23,7 +23,7 @@ export type ParsedReceipt = {
 
 const AMOUNT_KEYWORDS = /(amount|total|paid|payment|jumlah|金额|总额|实付|付款|charged)/i;
 const MERCHANT_KEYWORDS =
-  /^(pay to|paid to|transfer to|to|merchant|recipient|receiver|收款方|商家|收款人|penerima)(?=\s|:|：|$)\s*[:：]?\s*/i;
+  /^(pay to|paid to|transfer to|to|merchant|merchant name|payment details|recipient|receiver|收款方|商家|收款人|penerima)(?=\s|:|：|$)\s*[:：]?\s*/i;
 
 // 分类只有：衣 食 住 行 + 其他支出（label 必须和 categories 表的 label_zh 一致）。
 
@@ -124,7 +124,8 @@ function looksLikeNoise(line: string): boolean {
     /\b(RM|MYR|USD|USDT|USDC|SGD|EUR|GBP)\s*-?\s*\d|\d\s*(USD|USDT|USDC|SGD|EUR|GBP)\b|[$€£¥]\s*\d|\d{1,2}[:.]\d{2}\s*(am|pm)?$|successful|success|berjaya|成功|completed|pending|receipt|reference|ref\s*no|transaction|\bdate\b|\btime\b|status|wallet|account|\bID\b/i.test(
       line,
     ) ||
-    /^[\d\s\-:/.,]+$/.test(line)
+    /^[\d\s\-:/.,]+$/.test(line) ||
+    /^(details?|transaction details?|receipt|activity|home|profile|transfer|new|share)$/i.test(line.trim())
   );
 }
 
@@ -140,7 +141,8 @@ function findMerchant(lines: string[]): string | null {
     if (MERCHANT_KEYWORDS.test(line)) {
       const rest = line.replace(MERCHANT_KEYWORDS, "").trim();
       if (rest.length >= 2) return rest;
-      const next = lines[i + 1]?.trim();
+      // Touch 'n Go 的明细是 “Payment Details / Payment - Parking” 这种：去掉前面的 “Payment - ”
+      const next = lines[i + 1]?.trim().replace(/^(payment|bayaran)\s*[-–:]\s*/i, "");
       if (next && !looksLikeNoise(next)) return next;
     }
   }

@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { parseReceipt } from "@/lib/receiptParser";
-import { CATEGORY_CHOICES, rm } from "@/lib/mobile";
+import { CATEGORY_CHOICES, dayHeading, malaysiaNow, rm, todayISO } from "@/lib/mobile";
 import { formatForeign, rateToMYR } from "@/lib/fx";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 
@@ -13,11 +13,6 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 
 function reply(status: number, message: string, extra: Record<string, unknown> = {}) {
   return Response.json({ ok: status === 200, message, ...extra }, { status });
-}
-
-// 服务器可能在 UTC，截图没写日期时按马来西亚时间算“今天”
-function malaysiaToday(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" }).format(new Date());
 }
 
 export async function handleCapture(request: Request, token: string | undefined) {
@@ -41,12 +36,18 @@ export async function handleCapture(request: Request, token: string | undefined)
 
   if (!text.trim()) return reply(400, "截图里没有识别到文字。");
 
-  const parsed = parseReceipt(text);
+  const parsed = parseReceipt(text, malaysiaNow());
   if (!parsed.amount) {
     return reply(422, "没在截图里找到金额，这笔没有记录。", { parsed });
   }
 
   // 记账一律用马币。截图上只有外币时，按当天汇率换算，并把原本的外币金额一起存下来。
+  // 日期用截图上写的交易日期（这样补记旧的交易会算进正确的月份）；截图没写才用今天
+  const today = todayISO();
+  const occurredOn = parsed.occurredOn ?? today;
+  // 不是今天的，在通知里讲清楚记到了哪一天，免得用户在今天的列表里找不到
+  const filedUnder = occurredOn === today ? "" : `（记在 ${dayHeading(occurredOn).label}）`;
+
   let amountMYR = parsed.amount;
   let original = parsed.original;
   if (parsed.currency !== "MYR") {
@@ -73,7 +74,7 @@ export async function handleCapture(request: Request, token: string | undefined)
     p_amount: amountMYR,
     p_merchant: parsed.merchant ?? "",
     p_category_label: parsed.categoryLabel,
-    p_occurred_on: parsed.occurredOn ?? malaysiaToday(),
+    p_occurred_on: occurredOn,
     p_raw_text: text,
     p_original_amount: original?.amount,
     p_original_currency: original?.currency,
@@ -93,11 +94,12 @@ export async function handleCapture(request: Request, token: string | undefined)
   const result = (saved ?? {}) as { id?: string; category?: string; needs_review?: boolean };
   const category = result.category ?? parsed.categoryLabel;
   const summary = `${rm(amountMYR)}${from}${who}`;
+  const tail = filedUnder;
 
   // 分类拿不准：这笔已经先记下了（暂时放在 category），同时让快捷指令弹出选单问用户。
   // 旧版快捷指令不认识 ask，只会显示 message；那笔会留在 App 首页的“还没分类”里等用户选。
   if (result.needs_review && result.id) {
-    return reply(200, `✅ 已记账 ${summary} · 还没分类`, {
+    return reply(200, `✅ 已记账 ${summary} · 还没分类${tail}`, {
       parsed,
       amountMYR,
       category,
@@ -110,7 +112,7 @@ export async function handleCapture(request: Request, token: string | undefined)
     });
   }
 
-  return reply(200, `✅ 已记账 ${summary} · ${category}`, { parsed, amountMYR, category });
+  return reply(200, `✅ 已记账 ${summary} · ${category}${tail}`, { parsed, amountMYR, category });
 }
 
 /** 快捷指令弹出选单后，把用户选的那一项送回来（body: { id, category: 选单上的文字, remember }） */

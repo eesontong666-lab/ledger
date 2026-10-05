@@ -61,13 +61,22 @@ export function dayHeading(isoDate: string): { label: string; weekday: string } 
   return { label: `${m}月${d}日`, weekday: WEEKDAYS[date.getDay()] };
 }
 
+/**
+ * “现在”的马来西亚时间。服务器（Vercel）的时钟是 UTC，比马来西亚慢 8 小时，
+ * 直接用 new Date() 的话，半夜到早上 8 点之间会把“今天”算成昨天、月初算成上个月。
+ * 返回的 Date 只能拿来读年月日时分（getFullYear / getMonth / getDate…）。
+ */
+export function malaysiaNow(): Date {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kuala_Lumpur" }));
+}
+
 export function todayISO(): string {
-  const now = new Date();
+  const now = malaysiaNow();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 export function monthRange(ym?: string): { start: string; end: string; year: number; month: number } {
-  const now = new Date();
+  const now = malaysiaNow();
   let year = now.getFullYear();
   let month = now.getMonth() + 1;
   if (ym && /^\d{4}-\d{2}$/.test(ym)) {
@@ -97,7 +106,7 @@ export function goalProgress(
   let perMonth: number | null = null;
   if (goal.target_date) {
     const [y, m, d] = goal.target_date.split("-").map(Number);
-    daysLeft = Math.ceil((new Date(y, m - 1, d).getTime() - Date.now()) / 86_400_000);
+    daysLeft = Math.ceil((new Date(y, m - 1, d).getTime() - malaysiaNow().getTime()) / 86_400_000);
     if (daysLeft > 0 && remaining > 0) perMonth = remaining / Math.max(1, daysLeft / 30.44);
   }
   return { target, saved, percent, remaining, daysLeft, perMonth, done: saved >= target && target > 0 };
@@ -124,3 +133,8 @@ export const CATEGORY_CHOICES: { label: string; text: string }[] = [
   { label: "行", text: "🚗 行 · 交通油费" },
   { label: "其他支出", text: "🧾 其他" },
 ];
+
+/** 这个时间点是不是在最近 N 小时内 */
+export function withinLastHours(iso: string, hours: number): boolean {
+  return Date.now() - new Date(iso).getTime() < hours * 60 * 60 * 1000;
+}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { CATEGORY_CHOICES, categoryEmoji, monthRange, rm } from "@/lib/mobile";
+import { CATEGORY_CHOICES, categoryEmoji, dayHeading, monthRange, rm, todayISO, withinLastHours } from "@/lib/mobile";
 import { updateTransactionCategory } from "@/lib/actions/mobile";
 import { HomeFeed, type FeedItem } from "@/components/mobile/HomeFeed";
 import { Panel } from "@/components/mobile/ui";
@@ -48,6 +48,13 @@ export default async function HomePage() {
   const expense = (monthTx ?? []).filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const income = (monthTx ?? []).filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
 
+  // 最近 24 小时内记的、但交易日期不是今天的（补记旧截图）：它们排在各自的日期下面，提醒一下免得以为没记到
+  const today = todayISO();
+  const backfilled = (txs ?? []).filter(
+    (t) => t.source === "screenshot" && t.occurred_on !== today && withinLastHours(t.created_at, 24),
+  );
+  const backfilledDays = [...new Set(backfilled.map((t) => t.occurred_on))].sort();
+
   // 截图记账时拿不准分类的那些：放在最上面让用户点一下
   const pending = (txs ?? []).filter((t) => t.needs_review).slice(0, 5);
   const choices = CATEGORY_CHOICES.map((c) => ({
@@ -87,6 +94,13 @@ export default async function HomePage() {
             ))}
           </div>
         </section>
+      )}
+
+      {backfilled.length > 0 && (
+        <p className="mb-4 rounded-2xl border border-sky-400/25 bg-sky-400/[0.07] px-4 py-3 text-[13px] leading-relaxed text-sky-100/85">
+          📥 最近补记了 {backfilled.length} 笔较早的交易，按截图上的日期排在{" "}
+          <b>{backfilledDays.map((d) => dayHeading(d).label).join("、")}</b> 下面，往下滑就看得到。
+        </p>
       )}
 
       <Panel className="mb-5 overflow-hidden p-0">

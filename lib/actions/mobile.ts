@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { CategoryType } from "@/lib/types";
-import { SPLIT_CHOICE, splitIncome } from "@/lib/mobile";
+import { SPLIT_CHOICE, splitIncome, todayISO } from "@/lib/mobile";
 import { identifyMerchant } from "@/lib/brands";
 
 async function requireUser() {
@@ -218,7 +218,7 @@ export async function addLiabilityEntry(id: string, formData: FormData) {
     user_id: user.id,
     amount,
     note: (formData.get("note") as string)?.trim() || null,
-    occurred_on: String(formData.get("occurred_on") || new Date().toISOString().slice(0, 10)),
+    occurred_on: String(formData.get("occurred_on") || todayISO()),
   });
   if (error) throw new Error(error.message);
 
@@ -273,7 +273,7 @@ export async function addGoalSaving(id: string, formData: FormData) {
     goal_id: id,
     user_id: user.id,
     amount,
-    occurred_on: new Date().toISOString().slice(0, 10),
+    occurred_on: todayISO(),
   });
   if (error) throw new Error(error.message);
   goalPaths(id);
