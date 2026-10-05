@@ -1,0 +1,15 @@
+insert into public.categories (type, label_zh, sort_order) values
+  ('income', '工资', 1),
+  ('income', '奖金', 2),
+  ('income', '投资收益', 3),
+  ('income', '其他收入', 4),
+  ('expense', '餐饮', 10),
+  ('expense', '交通', 11),
+  ('expense', '住房', 12),
+  ('expense', '水电煤', 13),
+  ('expense', '购物', 14),
+  ('expense', '娱乐', 15),
+  ('expense', '医疗', 16),
+  ('expense', '教育', 17),
+  ('expense', '保险', 18),
+  ('expense', '其他支出', 19);
