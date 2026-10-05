@@ -376,6 +376,7 @@ export type Database = {
     Functions: {
       app_passcode_state: { Args: never; Returns: string }
       change_app_passcode: { Args: { p_new: string }; Returns: undefined }
+      remember_merchant_category: { Args: { p_merchant: string; p_category_id: string }; Returns: number }
       capture_transaction: {
         Args: {
           p_amount: number

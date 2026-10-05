@@ -77,6 +77,11 @@ export default async function TransactionDetailPage({ params }: { params: Promis
           );
         })}
       </form>
+      {tx.merchant && (
+        <p className="-mt-2 mb-4 px-1 text-xs leading-relaxed text-white/40">
+          改分类后会记住「{tx.merchant}」：以后同一个商家自动归到你选的分类，之前的记录也会一起改。
+        </p>
+      )}
 
       <Panel className="divide-y divide-white/[0.06] px-5">
         {rows.map(([k, v]) => (

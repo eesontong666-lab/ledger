@@ -68,7 +68,7 @@ export async function handleCapture(request: Request, token: string | undefined)
     { auth: { persistSession: false } },
   );
 
-  const { error } = await supabase.rpc("capture_transaction", {
+  const { data: saved, error } = await supabase.rpc("capture_transaction", {
     p_token: token,
     p_amount: amountMYR,
     p_merchant: parsed.merchant ?? "",
@@ -88,5 +88,8 @@ export async function handleCapture(request: Request, token: string | undefined)
 
   const who = parsed.merchant ? ` · ${parsed.merchant}` : "";
   const from = original ? `（${formatForeign(original.amount, original.currency)}）` : "";
-  return reply(200, `✅ 已记账 ${rm(amountMYR)}${from}${who} · ${parsed.categoryLabel}`, { parsed, amountMYR });
+  // 数据库可能用了“用户以前给这个商家选的分类”，以它返回的为准
+  const result = (saved ?? {}) as { category?: string; learned?: boolean };
+  const category = result.category ?? parsed.categoryLabel;
+  return reply(200, `✅ 已记账 ${rm(amountMYR)}${from}${who} · ${category}`, { parsed, amountMYR, category });
 }

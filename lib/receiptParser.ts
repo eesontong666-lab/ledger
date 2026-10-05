@@ -1,5 +1,6 @@
 // 把付款截图经 iPhone「从图像中提取文本」得到的文字，解析成一笔交易。
 // 纯函数、无依赖：服务端 /api/capture 和设置页的「测试识别」都用它。
+import { identifyMerchant } from "@/lib/brands";
 
 export type ParsedReceipt = {
   /** 金额，单位是下面的 currency（不一定是马币） */
@@ -25,14 +26,6 @@ const BANK_CATEGORY_RULES: [RegExp, string][] = [
   [/petrol|fuel|transport|travel|parking|toll|ride/i, "行"],
   [/shopping|fashion|clothing|apparel/i, "衣"],
   [/bills?|utilities|rent|housing|home|household/i, "住"],
-];
-
-// 2) 没有银行分类时，按商家名字里的关键词猜。越具体的放越前面。
-const CATEGORY_RULES: [RegExp, string][] = [
-  [/grab\s*food|foodpanda|shopeefood|restoran|restaurant|cafe|café|kopitiam|mamak|bakery|mcdonald|kfc|starbucks|tealive|zus|chagee|nasi|mee\b|food|kitchen|bistro|dim sum|pancake|茶|饭|面|餐/i, "食"],
-  [/setel|petronas|shell|petron|caltex|bhpetrol|petrol|grab|parking|\btoll\b|touch\s*'?n\s*go|\bmrt\b|\blrt\b|rapid|\bktm\b|airasia|\bbolt\b|maxim|油站|停车/i, "行"],
-  [/\btnb\b|tenaga|unifi|maxis|celcom|\bdigi\b|umobile|u mobile|yes 5g|air selangor|indah water|syabas|astro|rental|\brent\b|ikea|mr\.? diy|电费|水费|房租/i, "住"],
-  [/uniqlo|h&m|zara|padini|cotton on|nike|adidas|skechers|bata|shopee|lazada|tiktok shop|aeon|mydin|lotus|giant|jaya grocer|99 speedmart|kk mart|7-eleven|7 eleven|family\s*mart|daiso|\bmall\b|超市|商场|服饰/i, "衣"],
 ];
 
 const MONTHS: Record<string, number> = {
@@ -183,7 +176,8 @@ function findDate(text: string, today: Date): string | null {
   return null;
 }
 
-export function guessCategory(text: string, merchant: string | null = null): string {
+/** 截图里银行自己标的分类（Category 那一行，例如 “Food & Drink ›”），没有就返回 null */
+function bankCategory(text: string): string | null {
   // 银行的分类标签是一行以 › 或 > 结尾的短字（OCR 可能在前面带个图标乱码）
   const chips = text
     .split(/\r?\n/)
@@ -192,10 +186,15 @@ export function guessCategory(text: string, merchant: string | null = null): str
   for (const chip of chips) {
     for (const [re, label] of BANK_CATEGORY_RULES) if (re.test(chip)) return label;
   }
-  if (merchant) {
-    for (const [re, label] of CATEGORY_RULES) if (re.test(merchant)) return label;
-  }
-  return "其他支出";
+  return null;
+}
+
+/**
+ * 分类的优先顺序：银行自己标的分类 → 内置品牌名单 / 店名里的字眼 → 其他支出。
+ * （用户改过分类的商家优先级最高，那一步在数据库的 capture_transaction 里做。）
+ */
+export function guessCategory(text: string, merchant: string | null = null): string {
+  return bankCategory(text) ?? identifyMerchant(merchant)?.category ?? "其他支出";
 }
 
 export function parseReceipt(text: string, today: Date = new Date()): ParsedReceipt {
@@ -203,14 +202,16 @@ export function parseReceipt(text: string, today: Date = new Date()): ParsedRece
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
-  const merchant = findMerchant(lines);
+  const rawMerchant = findMerchant(lines);
+  // 认得的品牌换成干净的名字（“MCDONALDS-SS15 DT 1010349” → “McDonald's”）
+  const merchant = identifyMerchant(rawMerchant)?.name ?? rawMerchant;
   const money = findMoney(lines);
   return {
     amount: money.main?.amount ?? null,
     currency: money.main?.currency ?? "MYR",
     original: money.original,
     merchant,
-    categoryLabel: guessCategory(text, merchant),
+    categoryLabel: guessCategory(text, rawMerchant),
     occurredOn: findDate(text, today),
   };
 }

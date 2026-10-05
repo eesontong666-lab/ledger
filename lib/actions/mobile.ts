@@ -134,12 +134,22 @@ export async function deleteMobileTransaction(id: string) {
 
 export async function updateTransactionCategory(id: string, formData: FormData) {
   const { supabase, user } = await requireUser();
-  const { error } = await supabase
+  const { data: tx, error } = await supabase
     .from("transactions")
     .update({ category_id: String(formData.get("category_id")) })
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("merchant")
+    .single();
   if (error) throw new Error(error.message);
+
+  // 记住这个商家：以后截图记账自动用这个分类，同一商家的旧记录也一起改过来
+  if (tx?.merchant) {
+    await supabase.rpc("remember_merchant_category", {
+      p_merchant: tx.merchant,
+      p_category_id: String(formData.get("category_id")),
+    });
+  }
   revalidateMobile();
   revalidatePath(`/tx/${id}`);
 }

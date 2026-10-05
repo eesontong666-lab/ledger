@@ -268,6 +268,68 @@ create trigger goal_contributions_sync
   after insert or update or delete on public.goal_contributions
   for each row execute function public.apply_goal_contribution();
 
+-- ---------- 记住用户改过的商家分类 ----------
+-- 商家名字的比对键：只留字母数字、全部大写（"McDonald's SS15" → "MCDONALDSSS15"）
+create or replace function public.merchant_key(p_merchant text)
+returns text
+language sql
+immutable
+set search_path = public
+as $$
+  select upper(regexp_replace(coalesce(p_merchant, ''), '[^[:alnum:]]+', '', 'g'));
+$$;
+
+create table if not exists public.merchant_rules (
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  merchant_key text not null,
+  merchant_name text not null,
+  category_id uuid not null references public.categories(id) on delete cascade,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, merchant_key)
+);
+create index if not exists merchant_rules_category_idx on public.merchant_rules (category_id);
+alter table public.merchant_rules enable row level security;
+drop policy if exists "merchant_rules_all_own" on public.merchant_rules;
+create policy "merchant_rules_all_own" on public.merchant_rules
+  for all using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+
+-- 用户在某笔交易上改了分类时调用：记住这个商家，并把同一商家的其他记录一起改过来。返回一起改了几笔。
+create or replace function public.remember_merchant_category(p_merchant text, p_category_id uuid)
+returns int
+language plpgsql
+security invoker set search_path = public
+as $$
+declare
+  v_key text := public.merchant_key(p_merchant);
+  v_type public.category_type;
+  v_count int;
+begin
+  if v_key = '' or (select auth.uid()) is null then
+    return 0;
+  end if;
+  select type into v_type from public.categories where id = p_category_id;
+  if v_type is null then
+    return 0;
+  end if;
+
+  insert into public.merchant_rules (user_id, merchant_key, merchant_name, category_id)
+  values ((select auth.uid()), v_key, trim(p_merchant), p_category_id)
+  on conflict (user_id, merchant_key)
+  do update set category_id = excluded.category_id, merchant_name = excluded.merchant_name, updated_at = now();
+
+  update public.transactions
+    set category_id = p_category_id
+    where user_id = (select auth.uid())
+      and type = v_type
+      and category_id <> p_category_id
+      and public.merchant_key(merchant) = v_key;
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+revoke all on function public.remember_merchant_category(text, uuid) from public, anon;
+grant execute on function public.remember_merchant_category(text, uuid) to authenticated;
+
 -- 快捷指令没有登录 cookie，靠密钥识别用户。security definer 才能越过 RLS 写入该用户的交易。
 -- 旧的 6 个参数的版本要先删掉，否则会和新版并存、调用时分不清
 drop function if exists public.capture_transaction(text, numeric, text, text, date, text);
@@ -290,6 +352,8 @@ declare
   v_user uuid;
   v_asset uuid;
   v_category uuid;
+  v_learned boolean := false;
+  v_label text;
   v_id uuid;
 begin
   select user_id, default_asset_id into v_user, v_asset
@@ -304,13 +368,25 @@ begin
     raise exception 'invalid amount' using errcode = '22023';
   end if;
 
-  select id into v_category from public.categories
-  where type = 'expense' and label_zh = coalesce(p_category_label, '其他支出')
-  limit 1;
+  -- 用户以前改过这个商家的分类 → 直接用他选的
+  if public.merchant_key(p_merchant) <> '' then
+    select r.category_id into v_category
+    from public.merchant_rules r
+    join public.categories c on c.id = r.category_id and c.type = 'expense'
+    where r.user_id = v_user and r.merchant_key = public.merchant_key(p_merchant);
+    v_learned := v_category is not null;
+  end if;
+
+  if v_category is null then
+    select id into v_category from public.categories
+    where type = 'expense' and label_zh = coalesce(p_category_label, '其他支出')
+    limit 1;
+  end if;
   if v_category is null then
     select id into v_category from public.categories
     where type = 'expense' and label_zh = '其他支出' limit 1;
   end if;
+  select label_zh into v_label from public.categories where id = v_category;
 
   insert into public.transactions
     (user_id, category_id, type, amount, occurred_on, note, merchant, asset_id, source, raw_text,
@@ -328,7 +404,7 @@ begin
 
   update public.capture_tokens set last_used_at = now() where user_id = v_user;
 
-  return json_build_object('id', v_id);
+  return json_build_object('id', v_id, 'category', v_label, 'learned', v_learned);
 end;
 $$;
 
