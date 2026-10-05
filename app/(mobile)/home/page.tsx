@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { categoryEmoji, monthRange, rm } from "@/lib/mobile";
+import { CATEGORY_CHOICES, categoryEmoji, monthRange, rm } from "@/lib/mobile";
+import { updateTransactionCategory } from "@/lib/actions/mobile";
 import { HomeFeed, type FeedItem } from "@/components/mobile/HomeFeed";
 import { Panel } from "@/components/mobile/ui";
 import { formatForeign } from "@/lib/fx";
@@ -13,11 +14,11 @@ export default async function HomePage() {
     await Promise.all([
       supabase
         .from("transactions")
-        .select("id, type, amount, occurred_on, note, merchant, category_id, asset_id, source, created_at, original_amount, original_currency")
+        .select("id, type, amount, occurred_on, note, merchant, category_id, asset_id, source, created_at, original_amount, original_currency, needs_review")
         .order("occurred_on", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(200),
-      supabase.from("categories").select("id, label_zh"),
+      supabase.from("categories").select("id, label_zh, type"),
       supabase.from("assets").select("id, name"),
       supabase.from("transactions").select("type, amount").gte("occurred_on", start).lt("occurred_on", end),
     ]);
@@ -47,8 +48,47 @@ export default async function HomePage() {
   const expense = (monthTx ?? []).filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const income = (monthTx ?? []).filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
 
+  // 截图记账时拿不准分类的那些：放在最上面让用户点一下
+  const pending = (txs ?? []).filter((t) => t.needs_review).slice(0, 5);
+  const choices = CATEGORY_CHOICES.map((c) => ({
+    ...c,
+    id: (categories ?? []).find((cat) => cat.type === "expense" && cat.label_zh === c.label)?.id,
+  })).filter((c): c is typeof c & { id: string } => !!c.id);
+
   return (
     <>
+      {pending.length > 0 && (
+        <section className="mb-5 rounded-3xl border border-[#e9a84a]/40 bg-[#e9a84a]/[0.08] p-4">
+          <p className="mb-3 text-[13px] font-semibold text-[#f3c57c]">
+            🤔 {pending.length} 笔还没分类，点一下告诉我是哪一类
+          </p>
+          <div className="flex flex-col gap-3">
+            {pending.map((t) => (
+              <form key={t.id} action={updateTransactionCategory.bind(null, t.id)}>
+                <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                  <span className="truncate text-[15px] font-semibold">{t.merchant || "（没读到商家）"}</span>
+                  <span className="shrink-0 text-[15px] font-semibold text-rose-400">{rm(Number(t.amount))}</span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {choices.map((c) => (
+                    <button
+                      key={c.id}
+                      type="submit"
+                      name="category_id"
+                      value={c.id}
+                      className="flex flex-col items-center gap-0.5 rounded-xl border border-white/10 bg-[#1c1f28] py-2 active:scale-95 active:border-[#d9748a]"
+                    >
+                      <span className="text-lg leading-none">{categoryEmoji(c.label)}</span>
+                      <span className="text-[11px] text-white/80">{c.label.replace("支出", "")}</span>
+                    </button>
+                  ))}
+                </div>
+              </form>
+            ))}
+          </div>
+        </section>
+      )}
+
       <Panel className="mb-5 overflow-hidden p-0">
         <div className="bg-gradient-to-br from-[#2a1f2a] via-[#1c1f28] to-[#1c1f28] p-5">
           <div className="flex items-center justify-between text-[13px] text-white/50">

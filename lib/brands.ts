@@ -5,7 +5,9 @@
 // 比对前会先去掉撇号、把各种符号变成空格，所以 "McDonald's"、"MC DONALDS"、"MCDONALDS-SS15" 都一样。
 
 // name 是 null 的：只用来判断分类，商家名字保留截图上原本的（例如某个停车场的名字）
-type Brand = [pattern: RegExp, name: string | null, category: string];
+// 第四栏写 true 的：这家店什么都卖（超市、百货、网购），每次买的东西不一样，
+// 所以每次都问用户这笔算哪一类，也不会“记住”上次的选择。
+type Brand = [pattern: RegExp, name: string | null, category: string, askEveryTime?: true];
 
 export const BRANDS: Brand[] = [
   // ---------- 食：快餐 / 连锁餐厅 ----------
@@ -67,22 +69,22 @@ export const BRANDS: Brand[] = [
   [/food ?panda/, "foodpanda", "食"],
   [/shopee ?food/, "ShopeeFood", "食"],
   // ---------- 食：超市 / 便利店（买菜、买吃的） ----------
-  [/jaya grocer/, "Jaya Grocer", "食"],
-  [/village grocer/, "Village Grocer", "食"],
-  [/ben s independent|\bbig\b.*grocer/, "B.I.G.", "食"],
-  [/lotus ?s?\b.*(store|stores|malaysia)|\blotuss\b|\btesco\b/, "Lotus's", "食"],
-  [/\baeon big\b/, "AEON BiG", "食"],
-  [/\bmydin\b/, "Mydin", "食"],
-  [/\bgiant\b/, "Giant", "食"],
-  [/econsave/, "Econsave", "食"],
-  [/\bnsk\b/, "NSK", "食"],
-  [/hero ?market/, "HeroMarket", "食"],
-  [/99 ?speed ?mart/, "99 Speedmart", "食"],
-  [/kk ?(super ?)?mart/, "KK Super Mart", "食"],
-  [/7 ?eleven|\b7 ?11\b|7 e malaysia/, "7-Eleven", "食"],
-  [/family ?mart/, "FamilyMart", "食"],
-  [/my ?news/, "myNEWS", "食"],
-  [/emart ?24/, "emart24", "食"],
+  [/jaya grocer/, "Jaya Grocer", "食", true],
+  [/village grocer/, "Village Grocer", "食", true],
+  [/ben s independent|\bbig\b.*grocer/, "B.I.G.", "食", true],
+  [/lotus ?s?\b.*(store|stores|malaysia)|\blotuss\b|\btesco\b/, "Lotus's", "食", true],
+  [/\baeon big\b/, "AEON BiG", "食", true],
+  [/\bmydin\b/, "Mydin", "食", true],
+  [/\bgiant\b/, "Giant", "食", true],
+  [/econsave/, "Econsave", "食", true],
+  [/\bnsk\b/, "NSK", "食", true],
+  [/hero ?market/, "HeroMarket", "食", true],
+  [/99 ?speed ?mart/, "99 Speedmart", "食", true],
+  [/kk ?(super ?)?mart/, "KK Super Mart", "食", true],
+  [/7 ?eleven|\b7 ?11\b|7 e malaysia/, "7-Eleven", "食", true],
+  [/family ?mart/, "FamilyMart", "食", true],
+  [/my ?news/, "myNEWS", "食", true],
+  [/emart ?24/, "emart24", "食", true],
   // ---------- 行：油站 ----------
   [/petronas|\bmesra\b/, "Petronas", "行"],
   [/\bsetel\b/, "Setel", "行"],
@@ -92,14 +94,14 @@ export const BRANDS: Brand[] = [
   [/bh ?petrol|\bbhp\b/, "BHPetrol", "行"],
   [/\bbp\b.*(station|petrol|connect)|^bp\b/, "BP", "行"],
   // ---------- 行：过路费 / 停车 / 公共交通 ----------
-  [/touch ?n ?go|\btng\b/, "Touch 'n Go", "行"],
+  [/touch ?n ?go|\btng\b/, "Touch 'n Go", "行", true],
   [/\bplus\b.*(toll|highway|miles)|plus malaysia/, "PLUS Highway", "行"],
   [/rapid ?kl|rapid ?bus|rapid ?rail|prasarana|\bmrt\b|\blrt\b|monorail/, "Rapid KL", "行"],
   [/\bktm\b|keretapi tanah melayu|\bets\b ticket/, "KTM", "行"],
   [/\bjpark\b|flexi ?parking|smart selangor parking|\bparking\b|\bparkir\b/, null, "行"],
   [/easybook|red ?bus|bus ?online ?ticket/, null, "行"],
   // ---------- 行：叫车 / 租车 / 充电 ----------
-  [/\bgrab\b/, "Grab", "行"],
+  [/\bgrab\b/, "Grab", "行", true],
   [/air ?asia ?ride|airasia move/, "AirAsia Ride", "行"],
   [/\bbolt\b/, "Bolt", "行"],
   [/\bmaxim\b/, "Maxim", "行"],
@@ -131,7 +133,7 @@ export const BRANDS: Brand[] = [
   // ---------- 住：房租 / 家具 / 家用 ----------
   [/\bsewa\b|\brental\b|\brent\b|maintenance fee|management fee|\bjmb\b|\bmc\b fee/, null, "住"],
   [/\bikea\b/, "IKEA", "住"],
-  [/mr ?d ?i ?y\b/, "MR.DIY", "住"],
+  [/mr ?d ?i ?y\b/, "MR.DIY", "住", true],
   [/ace hardware/, "Ace Hardware", "住"],
   [/home ?pro\b/, "HomePro", "住"],
   [/\bssf\b|kaison|\bnitori\b/, null, "住"],
@@ -152,20 +154,20 @@ export const BRANDS: Brand[] = [
   [/\bmuji\b/, "MUJI", "衣"],
   [/decathlon/, "Decathlon", "衣"],
   // ---------- 衣：网购 / 百货（一般购物） ----------
-  [/shopee/, "Shopee", "衣"],
-  [/lazada/, "Lazada", "衣"],
-  [/tiktok ?shop/, "TikTok Shop", "衣"],
+  [/shopee/, "Shopee", "衣", true],
+  [/lazada/, "Lazada", "衣", true],
+  [/tiktok ?shop/, "TikTok Shop", "衣", true],
   [/zalora/, "Zalora", "衣"],
-  [/taobao|tmall/, "Taobao", "衣"],
+  [/taobao|tmall/, "Taobao", "衣", true],
   [/\bshein\b/, "Shein", "衣"],
-  [/\btemu\b/, "Temu", "衣"],
-  [/\baeon\b/, "AEON", "衣"],
-  [/parkson/, "Parkson", "衣"],
-  [/\bsogo\b/, "SOGO", "衣"],
-  [/\bisetan\b/, "Isetan", "衣"],
-  [/daiso/, "Daiso", "衣"],
-  [/watsons/, "Watsons", "衣"],
-  [/guardian/, "Guardian", "衣"],
+  [/\btemu\b/, "Temu", "衣", true],
+  [/\baeon\b/, "AEON", "衣", true],
+  [/parkson/, "Parkson", "衣", true],
+  [/\bsogo\b/, "SOGO", "衣", true],
+  [/\bisetan\b/, "Isetan", "衣", true],
+  [/daiso/, "Daiso", "衣", true],
+  [/watsons/, "Watsons", "衣", true],
+  [/guardian/, "Guardian", "衣", true],
   [/sephora/, "Sephora", "衣"],
 ];
 
@@ -185,16 +187,24 @@ function normalize(name: string): string {
     .trim();
 }
 
+export type Identified = {
+  /** 干净的品牌名；null = 保留截图上原本的名字 */
+  name: string | null;
+  category: string;
+  /** 这家店什么都卖，分类要问用户 */
+  askEveryTime: boolean;
+};
+
 /** 认出商家：返回干净的名字和分类；认不出返回 null。 */
-export function identifyMerchant(merchant: string | null): { name: string | null; category: string } | null {
+export function identifyMerchant(merchant: string | null): Identified | null {
   if (!merchant) return null;
   const text = normalize(merchant);
   if (!text) return null;
-  for (const [pattern, name, category] of BRANDS) {
-    if (pattern.test(text)) return { name, category };
+  for (const [pattern, name, category, askEveryTime] of BRANDS) {
+    if (pattern.test(text)) return { name, category, askEveryTime: askEveryTime === true };
   }
   for (const [pattern, category] of GENERIC) {
-    if (pattern.test(text)) return { name: null, category };
+    if (pattern.test(text)) return { name: null, category, askEveryTime: false };
   }
   return null;
 }

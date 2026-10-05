@@ -42,6 +42,9 @@ export async function rateToMYR(currency: string): Promise<number | null> {
 
 /** 显示用：USD 10.00、USDT 12.5、IDR 25,000 */
 export function formatForeign(amount: number, currency: string): string {
-  const digits = Number.isInteger(amount) ? 0 : Math.min(8, Math.max(2, (String(amount).split(".")[1] ?? "").length));
+  // 没有小数的货币不补 .00；其他至少两位；加密货币的小数原样保留（最多 8 位）
+  const noDecimals = ["IDR", "VND", "JPY", "KRW"].includes(currency);
+  const decimals = (String(amount).split(".")[1] ?? "").length;
+  const digits = noDecimals ? Math.min(decimals, 2) : Math.min(8, Math.max(2, decimals));
   return `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }

@@ -115,3 +115,12 @@ export function splitIncome<T extends { percent: number }>(total: number, parts:
     return { ...p, amount: cents / 100 };
   });
 }
+
+/** 问用户“这笔算哪一类”时的选项。快捷指令的选单和 App 首页的待分类都用这一份。 */
+export const CATEGORY_CHOICES: { label: string; text: string }[] = [
+  { label: "食", text: "🍜 食 · 吃喝买菜" },
+  { label: "衣", text: "👕 衣 · 服饰购物" },
+  { label: "住", text: "🏠 住 · 房租水电家用" },
+  { label: "行", text: "🚗 行 · 交通油费" },
+  { label: "其他支出", text: "🧾 其他" },
+];

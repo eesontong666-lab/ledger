@@ -4,6 +4,7 @@ import { deleteMobileTransaction, updateTransactionCategory } from "@/lib/action
 import { BackHeader, Panel } from "@/components/mobile/ui";
 import { categoryEmoji, dayHeading, rm } from "@/lib/mobile";
 import { formatForeign } from "@/lib/fx";
+import { identifyMerchant } from "@/lib/brands";
 
 export default async function TransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -79,7 +80,9 @@ export default async function TransactionDetailPage({ params }: { params: Promis
       </form>
       {tx.merchant && (
         <p className="-mt-2 mb-4 px-1 text-xs leading-relaxed text-white/40">
-          改分类后会记住「{tx.merchant}」：以后同一个商家自动归到你选的分类，之前的记录也会一起改。
+          {identifyMerchant(tx.merchant)?.askEveryTime
+            ? `「${tx.merchant}」什么都卖，所以每次都会问你这笔算哪一类，不会记住上次的选择。`
+            : `改分类后会记住「${tx.merchant}」：以后同一个商家自动归到你选的分类，之前的记录也会一起改。`}
         </p>
       )}
 

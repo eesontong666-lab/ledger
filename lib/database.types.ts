@@ -318,6 +318,7 @@ export type Database = {
           created_at: string
           id: string
           merchant: string | null
+          needs_review: boolean
           note: string | null
           occurred_on: string
           original_amount: number | null
@@ -334,6 +335,7 @@ export type Database = {
           id?: string
           asset_id?: string | null
           merchant?: string | null
+          needs_review?: boolean
           note?: string | null
           original_amount?: number | null
           original_currency?: string | null
@@ -350,6 +352,7 @@ export type Database = {
           id?: string
           asset_id?: string | null
           merchant?: string | null
+          needs_review?: boolean
           note?: string | null
           original_amount?: number | null
           original_currency?: string | null
@@ -387,7 +390,12 @@ export type Database = {
           p_original_currency?: string
           p_raw_text: string
           p_token: string
+          p_uncertain?: boolean
         }
+        Returns: Json
+      }
+      capture_set_category: {
+        Args: { p_token: string; p_id: string; p_category_label: string; p_remember?: boolean }
         Returns: Json
       }
     }

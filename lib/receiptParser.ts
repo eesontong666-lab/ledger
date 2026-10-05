@@ -11,6 +11,13 @@ export type ParsedReceipt = {
   original: { amount: number; currency: string } | null;
   merchant: string | null;
   categoryLabel: string;
+  /**
+   * 分类拿不准，应该问用户：
+   * - "unknown"：银行没标分类，商家也认不出（路边摊、个人收款…）。用户选了之后会记住这个商家。
+   * - "mixed"：认得这家店，但它什么都卖（超市、百货、网购）。每次都问，不记住。
+   * - null：有把握，不用问。
+   */
+  ask: "unknown" | "mixed" | null;
   occurredOn: string | null; // YYYY-MM-DD
 };
 
@@ -197,6 +204,13 @@ export function guessCategory(text: string, merchant: string | null = null): str
   return bankCategory(text) ?? identifyMerchant(merchant)?.category ?? "其他支出";
 }
 
+function needsAsking(text: string, merchant: string | null): ParsedReceipt["ask"] {
+  if (bankCategory(text)) return null; // 银行已经标了
+  const known = identifyMerchant(merchant);
+  if (!known) return "unknown";
+  return known.askEveryTime ? "mixed" : null;
+}
+
 export function parseReceipt(text: string, today: Date = new Date()): ParsedReceipt {
   const lines = text
     .split(/\r?\n/)
@@ -212,6 +226,7 @@ export function parseReceipt(text: string, today: Date = new Date()): ParsedRece
     original: money.original,
     merchant,
     categoryLabel: guessCategory(text, rawMerchant),
+    ask: needsAsking(text, rawMerchant),
     occurredOn: findDate(text, today),
   };
 }

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { CategoryType } from "@/lib/types";
 import { SPLIT_CHOICE, splitIncome } from "@/lib/mobile";
+import { identifyMerchant } from "@/lib/brands";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -136,15 +137,16 @@ export async function updateTransactionCategory(id: string, formData: FormData) 
   const { supabase, user } = await requireUser();
   const { data: tx, error } = await supabase
     .from("transactions")
-    .update({ category_id: String(formData.get("category_id")) })
+    .update({ category_id: String(formData.get("category_id")), needs_review: false })
     .eq("id", id)
     .eq("user_id", user.id)
     .select("merchant")
     .single();
   if (error) throw new Error(error.message);
 
-  // 记住这个商家：以后截图记账自动用这个分类，同一商家的旧记录也一起改过来
-  if (tx?.merchant) {
+  // 记住这个商家：以后截图记账自动用这个分类，同一商家的旧记录也一起改过来。
+  // 超市、网购这种什么都卖的店不记：每次买的东西不一样，下次还是问。
+  if (tx?.merchant && !identifyMerchant(tx.merchant)?.askEveryTime) {
     await supabase.rpc("remember_merchant_category", {
       p_merchant: tx.merchant,
       p_category_id: String(formData.get("category_id")),

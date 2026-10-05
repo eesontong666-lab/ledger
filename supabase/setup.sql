@@ -79,6 +79,7 @@ create table if not exists public.transactions (
   raw_text text,
   original_amount numeric(20,8),
   original_currency text,
+  needs_review boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -146,13 +147,15 @@ create table if not exists public.app_passcode (
 -- ---------- 旧版本升级时补上后来才加的栏位（全新安装时这些已经在上面建好，不会重复） ----------
 alter table public.transactions
   add column if not exists original_amount numeric(20,8),
-  add column if not exists original_currency text;
+  add column if not exists original_currency text,
+  add column if not exists needs_review boolean not null default false;
 
 -- ---------- 索引 ----------
 create index if not exists transactions_user_date_idx on public.transactions (user_id, occurred_on desc);
 create index if not exists transactions_user_category_idx on public.transactions (user_id, category_id);
 create index if not exists transactions_category_id_idx on public.transactions (category_id);
 create index if not exists transactions_asset_idx on public.transactions (asset_id);
+create index if not exists transactions_needs_review_idx on public.transactions (user_id) where needs_review;
 create index if not exists assets_user_id_idx on public.assets (user_id);
 create index if not exists liabilities_user_id_idx on public.liabilities (user_id);
 create index if not exists liability_entries_liability_idx on public.liability_entries (liability_id, occurred_on desc);
@@ -293,7 +296,7 @@ drop policy if exists "merchant_rules_all_own" on public.merchant_rules;
 create policy "merchant_rules_all_own" on public.merchant_rules
   for all using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
--- 用户在某笔交易上改了分类时调用：记住这个商家，并把同一商家的其他记录一起改过来。返回一起改了几笔。
+-- 用户在 App 里改了某笔交易的分类时调用：记住这个商家，同一商家的其他记录（包括“待分类”的）一起改。返回改了几笔。
 create or replace function public.remember_merchant_category(p_merchant text, p_category_id uuid)
 returns int
 language plpgsql
@@ -318,10 +321,10 @@ begin
   do update set category_id = excluded.category_id, merchant_name = excluded.merchant_name, updated_at = now();
 
   update public.transactions
-    set category_id = p_category_id
+    set category_id = p_category_id, needs_review = false
     where user_id = (select auth.uid())
       and type = v_type
-      and category_id <> p_category_id
+      and (category_id <> p_category_id or needs_review)
       and public.merchant_key(merchant) = v_key;
   get diagnostics v_count = row_count;
   return v_count;
@@ -331,8 +334,9 @@ revoke all on function public.remember_merchant_category(text, uuid) from public
 grant execute on function public.remember_merchant_category(text, uuid) to authenticated;
 
 -- 快捷指令没有登录 cookie，靠密钥识别用户。security definer 才能越过 RLS 写入该用户的交易。
--- 旧的 6 个参数的版本要先删掉，否则会和新版并存、调用时分不清
+-- 旧版本（参数比较少）要先删掉，否则会和新版并存、调用时分不清
 drop function if exists public.capture_transaction(text, numeric, text, text, date, text);
+drop function if exists public.capture_transaction(text, numeric, text, text, date, text, numeric, text);
 
 create or replace function public.capture_transaction(
   p_token text,
@@ -342,7 +346,8 @@ create or replace function public.capture_transaction(
   p_occurred_on date,
   p_raw_text text,
   p_original_amount numeric default null,
-  p_original_currency text default null
+  p_original_currency text default null,
+  p_uncertain boolean default false
 )
 returns json
 language plpgsql
@@ -353,6 +358,7 @@ declare
   v_asset uuid;
   v_category uuid;
   v_learned boolean := false;
+  v_review boolean;
   v_label text;
   v_id uuid;
 begin
@@ -388,13 +394,15 @@ begin
   end if;
   select label_zh into v_label from public.categories where id = v_category;
 
+  v_review := coalesce(p_uncertain, false) and not v_learned;
+
   insert into public.transactions
     (user_id, category_id, type, amount, occurred_on, note, merchant, asset_id, source, raw_text,
-     original_amount, original_currency)
+     original_amount, original_currency, needs_review)
   values
     (v_user, v_category, 'expense', round(p_amount, 2), coalesce(p_occurred_on, current_date),
      null, nullif(trim(p_merchant), ''), v_asset, 'screenshot', left(p_raw_text, 4000),
-     p_original_amount, nullif(upper(trim(p_original_currency)), ''))
+     p_original_amount, nullif(upper(trim(p_original_currency)), ''), v_review)
   returning id into v_id;
 
   if v_asset is not null then
@@ -404,7 +412,62 @@ begin
 
   update public.capture_tokens set last_used_at = now() where user_id = v_user;
 
-  return json_build_object('id', v_id, 'category', v_label, 'learned', v_learned);
+  return json_build_object('id', v_id, 'category', v_label, 'learned', v_learned, 'needs_review', v_review);
+end;
+$$;
+
+-- 快捷指令弹出选单后，把用户选的分类写回去（同样靠密钥识别用户）。
+-- p_remember = true 时记住这个商家，以后不再问，同一商家的旧记录也一起改。
+create or replace function public.capture_set_category(
+  p_token text,
+  p_id uuid,
+  p_category_label text,
+  p_remember boolean default true
+)
+returns json
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_user uuid;
+  v_category uuid;
+  v_merchant text;
+  v_key text;
+begin
+  select user_id into v_user from public.capture_tokens
+  where token_hash = encode(extensions.digest(p_token, 'sha256'), 'hex');
+  if v_user is null then
+    raise exception 'invalid token' using errcode = '28000';
+  end if;
+
+  select id into v_category from public.categories
+  where type = 'expense' and label_zh = p_category_label limit 1;
+  if v_category is null then
+    raise exception 'unknown category' using errcode = '22023';
+  end if;
+
+  update public.transactions
+    set category_id = v_category, needs_review = false
+    where id = p_id and user_id = v_user and type = 'expense'
+    returning merchant into v_merchant;
+  if not found then
+    raise exception 'transaction not found' using errcode = '22023';
+  end if;
+
+  v_key := public.merchant_key(v_merchant);
+  if coalesce(p_remember, true) and v_key <> '' then
+    insert into public.merchant_rules (user_id, merchant_key, merchant_name, category_id)
+    values (v_user, v_key, trim(v_merchant), v_category)
+    on conflict (user_id, merchant_key)
+    do update set category_id = excluded.category_id, merchant_name = excluded.merchant_name, updated_at = now();
+
+    update public.transactions
+      set category_id = v_category, needs_review = false
+      where user_id = v_user and type = 'expense' and public.merchant_key(merchant) = v_key
+        and (category_id <> v_category or needs_review);
+  end if;
+
+  return json_build_object('category', p_category_label, 'merchant', v_merchant);
 end;
 $$;
 
@@ -489,8 +552,11 @@ end;
 $$;
 
 -- ---------- 函数权限 ----------
-revoke all on function public.capture_transaction(text, numeric, text, text, date, text, numeric, text) from public;
-grant execute on function public.capture_transaction(text, numeric, text, text, date, text, numeric, text) to anon, authenticated;
+revoke all on function public.capture_transaction(text, numeric, text, text, date, text, numeric, text, boolean) from public;
+grant execute on function public.capture_transaction(text, numeric, text, text, date, text, numeric, text, boolean) to anon, authenticated;
+
+revoke all on function public.capture_set_category(text, uuid, text, boolean) from public;
+grant execute on function public.capture_set_category(text, uuid, text, boolean) to anon, authenticated;
 
 revoke all on function public.app_passcode_login(text, boolean) from public, anon, authenticated;
 grant execute on function public.app_passcode_login(text, boolean) to service_role;

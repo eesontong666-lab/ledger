@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { parseReceipt } from "@/lib/receiptParser";
-import { rm } from "@/lib/mobile";
+import { CATEGORY_CHOICES, rm } from "@/lib/mobile";
 import { formatForeign, rateToMYR } from "@/lib/fx";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 
@@ -77,6 +77,7 @@ export async function handleCapture(request: Request, token: string | undefined)
     p_raw_text: text,
     p_original_amount: original?.amount,
     p_original_currency: original?.currency,
+    p_uncertain: parsed.ask !== null,
   });
 
   if (error) {
@@ -89,7 +90,54 @@ export async function handleCapture(request: Request, token: string | undefined)
   const who = parsed.merchant ? ` · ${parsed.merchant}` : "";
   const from = original ? `（${formatForeign(original.amount, original.currency)}）` : "";
   // 数据库可能用了“用户以前给这个商家选的分类”，以它返回的为准
-  const result = (saved ?? {}) as { category?: string; learned?: boolean };
+  const result = (saved ?? {}) as { id?: string; category?: string; needs_review?: boolean };
   const category = result.category ?? parsed.categoryLabel;
-  return reply(200, `✅ 已记账 ${rm(amountMYR)}${from}${who} · ${category}`, { parsed, amountMYR, category });
+  const summary = `${rm(amountMYR)}${from}${who}`;
+
+  // 分类拿不准：这笔已经先记下了（暂时放在 category），同时让快捷指令弹出选单问用户。
+  // 旧版快捷指令不认识 ask，只会显示 message；那笔会留在 App 首页的“还没分类”里等用户选。
+  if (result.needs_review && result.id) {
+    return reply(200, `✅ 已记账 ${summary} · 还没分类`, {
+      parsed,
+      amountMYR,
+      category,
+      ask: 1,
+      id: result.id,
+      remember: parsed.ask === "unknown" ? 1 : 0,
+      question: `${summary}\n这笔算哪一类？`,
+      // 把猜的那一类放最前面，通常点第一个就对
+      choices: [...CATEGORY_CHOICES].sort((a, b) => Number(b.label === category) - Number(a.label === category)).map((c) => c.text),
+    });
+  }
+
+  return reply(200, `✅ 已记账 ${summary} · ${category}`, { parsed, amountMYR, category });
+}
+
+/** 快捷指令弹出选单后，把用户选的那一项送回来（body: { id, category: 选单上的文字, remember }） */
+export async function handleSetCategory(request: Request, token: string | undefined) {
+  if (!token) return reply(401, "缺少密钥。");
+  let body: { id?: unknown; category?: unknown; remember?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return reply(400, "读不到你选的分类。");
+  }
+
+  const picked = String(body.category ?? "");
+  const choice = CATEGORY_CHOICES.find((c) => c.text === picked || c.label === picked) ??
+    CATEGORY_CHOICES.find((c) => c.label !== "其他支出" && picked.includes(c.label));
+  const label = choice?.label ?? "其他支出";
+
+  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  const { error } = await supabase.rpc("capture_set_category", {
+    p_token: token,
+    p_id: String(body.id ?? ""),
+    p_category_label: label,
+    p_remember: !(body.remember === 0 || body.remember === "0" || body.remember === false),
+  });
+  if (error) {
+    if (error.message.includes("invalid token")) return reply(401, "密钥无效或已重新生成。");
+    return reply(500, "分类没有保存成功，请打开 App 再选一次。");
+  }
+  return reply(200, `👌 已归到「${label.replace("支出", "")}」`, { category: label });
 }

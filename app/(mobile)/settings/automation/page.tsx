@@ -21,6 +21,8 @@ export default async function AutomationPage() {
   // 用普通 https 链接下载再点开；shortcuts://import-shortcut 在 iPhone 上会报 import failed。
   // 文件名就是添加后的快捷指令名字。
   const fileUrl = `${origin}/${encodeURIComponent("Ledger Screenshot.shortcut")}`;
+  // 旧版：不会弹出分类选单，新版在某些 iOS 上出问题时的后备
+  const basicFileUrl = `${origin}/${encodeURIComponent("Ledger Screenshot Basic.shortcut")}`;
 
   const [{ data: token }, { data: assets }] = await Promise.all([
     supabase.from("capture_tokens").select("created_at, last_used_at, default_asset_id").maybeSingle(),
@@ -107,6 +109,32 @@ export default async function AutomationPage() {
             en="No download prompt? Open this address in Safari and try again: "
           />{" "}
           <span className="select-all break-all font-mono text-white/60">{fileUrl}</span>
+        </p>
+        <p className="mt-3 rounded-2xl bg-white/[0.04] p-3 text-xs leading-relaxed text-white/55">
+          <T
+            zh={
+              <>
+                💡 遇到认不出的商家，或超市、网购这种什么都卖的店，记账后手机会弹出选单问你「这笔算哪一类？」，点一下就好。按取消也没关系，这笔会留在首页的「还没分类」里。
+                <br />
+                如果新版快捷指令在你的手机上出错，可以改用不会弹选单的{" "}
+                <a href={basicFileUrl} download="Ledger Screenshot Basic.shortcut" className="text-[#f0a3b3] underline">
+                  基本版
+                </a>
+                。
+              </>
+            }
+            en={
+              <>
+                💡 For merchants it does not recognise, and for stores that sell everything (supermarkets, online shopping), a menu pops up after logging asking “which category?”. Tap one. Cancelling is fine: the entry waits under “not categorised yet” on the home screen.
+                <br />
+                If this shortcut misbehaves on your phone, use the{" "}
+                <a href={basicFileUrl} download="Ledger Screenshot Basic.shortcut" className="text-[#f0a3b3] underline">
+                  basic version
+                </a>{" "}
+                without the menu.
+              </>
+            }
+          />
         </p>
       </Panel>
 
