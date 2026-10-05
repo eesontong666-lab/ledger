@@ -320,6 +320,8 @@ export type Database = {
           merchant: string | null
           note: string | null
           occurred_on: string
+          original_amount: number | null
+          original_currency: string | null
           raw_text: string | null
           source: string
           type: Database["public"]["Enums"]["category_type"]
@@ -333,6 +335,8 @@ export type Database = {
           asset_id?: string | null
           merchant?: string | null
           note?: string | null
+          original_amount?: number | null
+          original_currency?: string | null
           raw_text?: string | null
           source?: string
           occurred_on?: string
@@ -347,6 +351,8 @@ export type Database = {
           asset_id?: string | null
           merchant?: string | null
           note?: string | null
+          original_amount?: number | null
+          original_currency?: string | null
           raw_text?: string | null
           source?: string
           occurred_on?: string
@@ -376,6 +382,8 @@ export type Database = {
           p_category_label: string
           p_merchant: string
           p_occurred_on: string
+          p_original_amount?: number
+          p_original_currency?: string
           p_raw_text: string
           p_token: string
         }

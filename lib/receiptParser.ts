@@ -2,7 +2,12 @@
 // 纯函数、无依赖：服务端 /api/capture 和设置页的「测试识别」都用它。
 
 export type ParsedReceipt = {
+  /** 金额，单位是下面的 currency（不一定是马币） */
   amount: number | null;
+  /** MYR，或截图上的外币代码（USD、USDT、SGD…） */
+  currency: string;
+  /** 截图同时写了马币和外币时，这里是外币那一边，仅供对账 */
+  original: { amount: number; currency: string } | null;
   merchant: string | null;
   categoryLabel: string;
   occurredOn: string | null; // YYYY-MM-DD
@@ -39,39 +44,84 @@ function toNumber(raw: string): number {
   return Number(raw.replace(/[,\s]/g, ""));
 }
 
-function findAmount(lines: string[]): number | null {
-  const moneyRe = /(?:RM|MYR)\s*-?\s*([\d,]+(?:\.\d{1,2})?)|-?\s*([\d,]+\.\d{2})\s*(?:RM|MYR)/gi;
-  const candidates: { value: number; score: number; index: number }[] = [];
+// 认得的货币写法 → 标准代码。稳定币（USDT/USDC）按 1:1 当作 USD 来换算。
+const CURRENCY_ALIASES: [string, string][] = [
+  ["USDT", "USDT"], ["USDC", "USDC"], ["US\\$", "USD"], ["USD", "USD"],
+  ["MYR", "MYR"], ["RM", "MYR"],
+  ["SGD", "SGD"], ["S\\$", "SGD"], ["HKD", "HKD"], ["HK\\$", "HKD"], ["AUD", "AUD"], ["A\\$", "AUD"],
+  ["TWD", "TWD"], ["NT\\$", "TWD"], ["EUR", "EUR"], ["€", "EUR"], ["GBP", "GBP"], ["£", "GBP"],
+  ["JPY", "JPY"], ["CNY", "CNY"], ["RMB", "CNY"], ["¥", "CNY"], ["￥", "CNY"],
+  ["THB", "THB"], ["฿", "THB"], ["IDR", "IDR"], ["Rp", "IDR"], ["VND", "VND"], ["₫", "VND"],
+  ["KRW", "KRW"], ["₩", "KRW"], ["PHP", "PHP"], ["₱", "PHP"], ["INR", "INR"], ["₹", "INR"],
+  ["\\$", "USD"], // 单独一个 $ 当作美元，要放最后
+];
+const TOKEN = CURRENCY_ALIASES.map(([alias]) => alias).join("|");
+const NUM = "[\\d][\\d.,]*";
+// 货币在前（USD 10.00、-RM 20.00）或在后（10.00 USDT）。字母写法前后不能紧贴别的字母，免得把 FARM 读成 RM。
+const MONEY_RE = new RegExp(
+  `(?<![A-Za-z])(${TOKEN})\\s*-?\\s*(${NUM})|(${NUM})\\s*(${TOKEN})(?![A-Za-z])`,
+  "gi",
+);
+
+function currencyCode(token: string): string {
+  const t = token.toUpperCase();
+  const hit = CURRENCY_ALIASES.find(([alias]) => alias.replace(/\\/g, "").toUpperCase() === t);
+  return hit ? hit[1] : "MYR";
+}
+
+function toAmount(raw: string, currency: string): number {
+  const cleaned = raw.replace(/[.,]+$/, "");
+  // 印尼盾、越南盾没有小数，点和逗号都是千位分隔（Rp 25.000）
+  if (currency === "IDR" || currency === "VND") return Number(cleaned.replace(/[.,]/g, ""));
+  return toNumber(cleaned);
+}
+
+// 整行就是一个金额（“-RM 20.00”、“10.00 USDT”），银行详情页里它的下一行通常是商家
+const AMOUNT_LINE_RE = new RegExp(`^[-+]?\\s*(?:(?:${TOKEN})\\s*-?\\s*${NUM}|${NUM}\\s*(?:${TOKEN}))$`, "i");
+
+type Money = { amount: number; currency: string };
+
+/** 找出这笔交易的金额。有马币就用马币（银行已经换算好了）；只有外币时返回外币，交给服务器按汇率换算。 */
+function findMoney(lines: string[]): { main: Money | null; original: Money | null } {
+  const candidates: (Money & { score: number; index: number })[] = [];
 
   lines.forEach((line, index) => {
-    for (const match of line.matchAll(moneyRe)) {
-      const value = toNumber(match[1] ?? match[2]);
-      if (!Number.isFinite(value) || value <= 0) continue;
+    for (const match of line.matchAll(MONEY_RE)) {
+      const currency = currencyCode(match[1] ?? match[4]);
+      const amount = toAmount(match[2] ?? match[3], currency);
+      if (!Number.isFinite(amount) || amount <= 0) continue;
       let score = 1;
       if (AMOUNT_KEYWORDS.test(line) || AMOUNT_KEYWORDS.test(lines[index - 1] ?? "")) score += 3;
-      if (/balance|baki|余额|limit|cashback|reward|points/i.test(line)) score -= 3;
-      candidates.push({ value, score, index });
+      if (/balance|baki|余额|limit|cashback|reward|points|available/i.test(line)) score -= 3;
+      if (/\bfee\b|gas|network|手续费|rate|汇率/i.test(line)) score -= 2;
+      candidates.push({ amount, currency, score, index });
     }
   });
 
-  // 没写 RM 的情况：找带关键词那一行里的小数
+  // 完全没写货币的情况：找带关键词那一行里的小数，当作马币
   if (candidates.length === 0) {
     lines.forEach((line, index) => {
       if (!AMOUNT_KEYWORDS.test(line)) return;
       const match = line.match(/([\d,]+\.\d{2})/);
-      if (match) candidates.push({ value: toNumber(match[1]), score: 1, index });
+      if (match) candidates.push({ amount: toNumber(match[1]), currency: "MYR", score: 1, index });
     });
   }
 
-  if (candidates.length === 0) return null;
   candidates.sort((a, b) => b.score - a.score || a.index - b.index);
-  return candidates[0].value;
+  const pick = (c: (typeof candidates)[number] | undefined): Money | null =>
+    c ? { amount: c.amount, currency: c.currency } : null;
+  const myr = candidates.find((c) => c.currency === "MYR" && c.score > 0);
+  const foreign = candidates.find((c) => c.currency !== "MYR" && c.score > 0);
+
+  if (myr) return { main: pick(myr), original: pick(foreign) };
+  if (foreign) return { main: pick(foreign), original: null };
+  return { main: pick(candidates[0]), original: null };
 }
 
 function looksLikeNoise(line: string): boolean {
   return (
     line.length < 3 ||
-    /\b(RM|MYR)\s*-?\s*\d|\d{1,2}[:.]\d{2}\s*(am|pm)?$|successful|success|berjaya|成功|completed|pending|receipt|reference|ref\s*no|transaction|\bdate\b|\btime\b|status|wallet|account|\bID\b/i.test(
+    /\b(RM|MYR|USD|USDT|USDC|SGD|EUR|GBP)\s*-?\s*\d|\d\s*(USD|USDT|USDC|SGD|EUR|GBP)\b|[$€£¥]\s*\d|\d{1,2}[:.]\d{2}\s*(am|pm)?$|successful|success|berjaya|成功|completed|pending|receipt|reference|ref\s*no|transaction|\bdate\b|\btime\b|status|wallet|account|\bID\b/i.test(
       line,
     ) ||
     /^[\d\s\-:/.,]+$/.test(line)
@@ -95,7 +145,7 @@ function findMerchant(lines: string[]): string | null {
     }
   }
   // 银行交易详情常见排版：金额下面一行就是商家（例如 “-RM 20.00” 下一行 “Setel”）
-  const amountIndex = lines.findIndex((l) => /^-?\s*(RM|MYR)\s*-?\s*[\d,]+(\.\d{1,2})?$/i.test(l));
+  const amountIndex = lines.findIndex((l) => AMOUNT_LINE_RE.test(l));
   const afterAmount = amountIndex >= 0 ? lines[amountIndex + 1]?.trim() : undefined;
   if (afterAmount && !looksLikeNoise(afterAmount) && !looksLikeReference(afterAmount) && /\p{L}{2,}/u.test(afterAmount)) {
     return afterAmount;
@@ -154,8 +204,11 @@ export function parseReceipt(text: string, today: Date = new Date()): ParsedRece
     .map((l) => l.trim())
     .filter(Boolean);
   const merchant = findMerchant(lines);
+  const money = findMoney(lines);
   return {
-    amount: findAmount(lines),
+    amount: money.main?.amount ?? null,
+    currency: money.main?.currency ?? "MYR",
+    original: money.original,
     merchant,
     categoryLabel: guessCategory(text, merchant),
     occurredOn: findDate(text, today),

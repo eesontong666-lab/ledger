@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { deleteMobileTransaction, updateTransactionCategory } from "@/lib/actions/mobile";
 import { BackHeader, Panel } from "@/components/mobile/ui";
 import { categoryEmoji, dayHeading, rm } from "@/lib/mobile";
+import { formatForeign } from "@/lib/fx";
 
 export default async function TransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,6 +34,13 @@ export default async function TransactionDetailPage({ params }: { params: Promis
     ["账户", asset?.name ?? "未指定"],
     ["来源", tx.source === "screenshot" ? "📸 截图自动记账" : "手动记账"],
   ];
+  if (tx.original_amount && tx.original_currency) {
+    const original = Number(tx.original_amount);
+    rows.splice(1, 0, [
+      "原本的货币",
+      `${formatForeign(original, tx.original_currency)}（1 ${tx.original_currency} ≈ RM${(Number(tx.amount) / original).toFixed(4)}）`,
+    ]);
+  }
   if (tx.note) rows.push(["备注", tx.note]);
 
   return (

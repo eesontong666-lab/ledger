@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { parseReceipt } from "@/lib/receiptParser";
 import { rm } from "@/lib/mobile";
+import { formatForeign } from "@/lib/fx";
 import { Panel, fieldClass } from "@/components/mobile/ui";
 import { useLang } from "@/components/mobile/lang";
 
@@ -32,10 +33,24 @@ export function ParserTester() {
         placeholder={SAMPLE}
         className={`${fieldClass} resize-none font-mono text-sm`}
       />
+      {result?.amount && result.currency !== "MYR" && (
+        <p className="mt-3 text-xs text-sky-200/80">
+          {en
+            ? `Foreign currency: it will be converted to RM at today's rate when logged.`
+            : "外币：实际记账时会按当天汇率换成马币。"}
+        </p>
+      )}
       {result && (
         <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
           {[
-            [en ? "Amount" : "金额", result.amount ? rm(result.amount) : en ? "❌ Not found" : "❌ 没找到"],
+            [
+              en ? "Amount" : "金额",
+              !result.amount
+                ? en ? "❌ Not found" : "❌ 没找到"
+                : result.currency === "MYR"
+                  ? rm(result.amount)
+                  : `${formatForeign(result.amount, result.currency)} → RM`,
+            ],
             [en ? "Merchant" : "商家", result.merchant ?? "—"],
             [en ? "Category" : "分类", result.categoryLabel],
             [en ? "Date" : "日期", result.occurredOn ?? (en ? "Today" : "今天")],

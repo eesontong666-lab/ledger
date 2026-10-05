@@ -6,6 +6,7 @@ A phone-only bookkeeping app for iPhone: double-tap the back of the phone on a p
 
 - 🔒 只用一个 6 位密码进入 / one 6-digit passcode, no email login
 - 📸 截图自动记账（金额、商家、分类）/ screenshot logging via an iPhone Shortcut
+- 💱 外币（USD、USDT、SGD…）自动按当天汇率换成马币 / foreign currencies converted to RM
 - 👕🍜🏠🚗 分类：衣、食、住、行、其他
 - 🏦 银行账户、投资、负债，各自的进出记录
 - 🔀 收入按比例自动分进各账户 / income split across accounts

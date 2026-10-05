@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { categoryEmoji, monthRange, rm } from "@/lib/mobile";
 import { HomeFeed, type FeedItem } from "@/components/mobile/HomeFeed";
 import { Panel } from "@/components/mobile/ui";
+import { formatForeign } from "@/lib/fx";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -12,7 +13,7 @@ export default async function HomePage() {
     await Promise.all([
       supabase
         .from("transactions")
-        .select("id, type, amount, occurred_on, note, merchant, category_id, asset_id, source, created_at")
+        .select("id, type, amount, occurred_on, note, merchant, category_id, asset_id, source, created_at, original_amount, original_currency")
         .order("occurred_on", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(200),
@@ -36,6 +37,10 @@ export default async function HomePage() {
       emoji: categoryEmoji(category),
       account: t.asset_id ? (assetName.get(t.asset_id) ?? null) : null,
       fromScreenshot: t.source === "screenshot",
+      original:
+        t.original_amount && t.original_currency
+          ? formatForeign(Number(t.original_amount), t.original_currency)
+          : null,
     };
   });
 

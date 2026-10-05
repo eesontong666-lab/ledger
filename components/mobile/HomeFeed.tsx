@@ -14,6 +14,8 @@ export type FeedItem = {
   emoji: string;
   account: string | null;
   fromScreenshot: boolean;
+  /** 原本是外币时，例如 “USD 10.00” */
+  original?: string | null;
 };
 
 export function HomeFeed({
@@ -101,11 +103,16 @@ export function HomeFeed({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[15px] font-semibold">{item.title}</p>
                       <p className="text-[13px] text-white/45">{item.category}</p>
-                      {(item.account || item.fromScreenshot) && (
+                      {(item.account || item.fromScreenshot || item.original) && (
                         <div className="mt-1 flex gap-1.5">
                           {item.account && (
                             <span className="max-w-[140px] truncate rounded-md border border-[#d9748a]/40 bg-[#d9748a]/10 px-1.5 py-0.5 text-[11px] text-[#f0a3b3]">
                               {item.account}
+                            </span>
+                          )}
+                          {item.original && (
+                            <span className="rounded-md border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-[11px] text-sky-200">
+                              {item.original}
                             </span>
                           )}
                           {item.fromScreenshot && (

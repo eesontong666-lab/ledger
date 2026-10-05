@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { categoryEmoji, monthRange, rm } from "@/lib/mobile";
 import { BackHeader, Panel, SectionLabel } from "@/components/mobile/ui";
 import { HomeFeed, type FeedItem } from "@/components/mobile/HomeFeed";
+import { formatForeign } from "@/lib/fx";
 
 // 统计页点某个分类进来：这个月该分类的每一笔消费
 export default async function CategoryDetailPage({
@@ -22,7 +23,7 @@ export default async function CategoryDetailPage({
     supabase.from("categories").select("id, label_zh, type").eq("id", categoryId).maybeSingle(),
     supabase
       .from("transactions")
-      .select("id, type, amount, occurred_on, note, merchant, asset_id, source, created_at")
+      .select("id, type, amount, occurred_on, note, merchant, asset_id, source, created_at, original_amount, original_currency")
       .eq("category_id", categoryId)
       .gte("occurred_on", start)
       .lt("occurred_on", end)
@@ -44,6 +45,10 @@ export default async function CategoryDetailPage({
     emoji: categoryEmoji(category.label_zh),
     account: t.asset_id ? (assetName.get(t.asset_id) ?? null) : null,
     fromScreenshot: t.source === "screenshot",
+      original:
+        t.original_amount && t.original_currency
+          ? formatForeign(Number(t.original_amount), t.original_currency)
+          : null,
   }));
 
   const total = items.reduce((s, i) => s + i.amount, 0);

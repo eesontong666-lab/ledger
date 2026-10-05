@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { parseReceipt } from "@/lib/receiptParser";
 import { rm } from "@/lib/mobile";
+import { formatForeign, rateToMYR } from "@/lib/fx";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 
 // iPhone 快捷指令调用：截图 → 提取文本 → POST 过来。
@@ -42,7 +43,23 @@ export async function handleCapture(request: Request, token: string | undefined)
 
   const parsed = parseReceipt(text);
   if (!parsed.amount) {
-    return reply(422, "没在截图里找到金额（RM），这笔没有记录。", { parsed });
+    return reply(422, "没在截图里找到金额，这笔没有记录。", { parsed });
+  }
+
+  // 记账一律用马币。截图上只有外币时，按当天汇率换算，并把原本的外币金额一起存下来。
+  let amountMYR = parsed.amount;
+  let original = parsed.original;
+  if (parsed.currency !== "MYR") {
+    const rate = await rateToMYR(parsed.currency);
+    if (!rate) {
+      return reply(
+        422,
+        `认出了 ${formatForeign(parsed.amount, parsed.currency)}，但暂时拿不到 ${parsed.currency} 的汇率，这笔没有记录。请稍后再试，或手动记一笔。`,
+        { parsed },
+      );
+    }
+    original = { amount: parsed.amount, currency: parsed.currency };
+    amountMYR = Math.max(0.01, Math.round(parsed.amount * rate * 100) / 100);
   }
 
   const supabase = createClient<Database>(
@@ -53,11 +70,13 @@ export async function handleCapture(request: Request, token: string | undefined)
 
   const { error } = await supabase.rpc("capture_transaction", {
     p_token: token,
-    p_amount: parsed.amount,
+    p_amount: amountMYR,
     p_merchant: parsed.merchant ?? "",
     p_category_label: parsed.categoryLabel,
     p_occurred_on: parsed.occurredOn ?? malaysiaToday(),
     p_raw_text: text,
+    p_original_amount: original?.amount,
+    p_original_currency: original?.currency,
   });
 
   if (error) {
@@ -68,5 +87,6 @@ export async function handleCapture(request: Request, token: string | undefined)
   }
 
   const who = parsed.merchant ? ` · ${parsed.merchant}` : "";
-  return reply(200, `✅ 已记账 ${rm(parsed.amount)}${who} · ${parsed.categoryLabel}`, { parsed });
+  const from = original ? `（${formatForeign(original.amount, original.currency)}）` : "";
+  return reply(200, `✅ 已记账 ${rm(amountMYR)}${from}${who} · ${parsed.categoryLabel}`, { parsed, amountMYR });
 }

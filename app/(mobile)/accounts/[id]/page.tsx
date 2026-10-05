@@ -6,6 +6,7 @@ import { HomeFeed, type FeedItem } from "@/components/mobile/HomeFeed";
 import { EditAccount } from "@/components/mobile/EditAccount";
 import { DeleteButton } from "@/components/mobile/DeleteButton";
 import { deleteMobileAccount, updateMobileAccount } from "@/lib/actions/mobile";
+import { formatForeign } from "@/lib/fx";
 
 export default async function AccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,7 +17,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
     supabase.from("assets").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("transactions")
-      .select("id, type, amount, occurred_on, note, merchant, category_id, source, created_at")
+      .select("id, type, amount, occurred_on, note, merchant, category_id, source, created_at, original_amount, original_currency")
       .eq("asset_id", id)
       .order("occurred_on", { ascending: false })
       .order("created_at", { ascending: false })
@@ -38,6 +39,10 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       emoji: categoryEmoji(category),
       account: null,
       fromScreenshot: t.source === "screenshot",
+      original:
+        t.original_amount && t.original_currency
+          ? formatForeign(Number(t.original_amount), t.original_currency)
+          : null,
     };
   });
 

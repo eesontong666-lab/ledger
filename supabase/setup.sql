@@ -77,6 +77,8 @@ create table if not exists public.transactions (
   asset_id uuid references public.assets(id) on delete set null,
   source text not null default 'manual',
   raw_text text,
+  original_amount numeric(20,8),
+  original_currency text,
   created_at timestamptz not null default now()
 );
 
@@ -140,6 +142,11 @@ create table if not exists public.app_passcode (
   locked_until timestamptz,
   updated_at timestamptz not null default now()
 );
+
+-- ---------- 旧版本升级时补上后来才加的栏位（全新安装时这些已经在上面建好，不会重复） ----------
+alter table public.transactions
+  add column if not exists original_amount numeric(20,8),
+  add column if not exists original_currency text;
 
 -- ---------- 索引 ----------
 create index if not exists transactions_user_date_idx on public.transactions (user_id, occurred_on desc);
@@ -262,13 +269,18 @@ create trigger goal_contributions_sync
   for each row execute function public.apply_goal_contribution();
 
 -- 快捷指令没有登录 cookie，靠密钥识别用户。security definer 才能越过 RLS 写入该用户的交易。
+-- 旧的 6 个参数的版本要先删掉，否则会和新版并存、调用时分不清
+drop function if exists public.capture_transaction(text, numeric, text, text, date, text);
+
 create or replace function public.capture_transaction(
   p_token text,
   p_amount numeric,
   p_merchant text,
   p_category_label text,
   p_occurred_on date,
-  p_raw_text text
+  p_raw_text text,
+  p_original_amount numeric default null,
+  p_original_currency text default null
 )
 returns json
 language plpgsql
@@ -301,10 +313,12 @@ begin
   end if;
 
   insert into public.transactions
-    (user_id, category_id, type, amount, occurred_on, note, merchant, asset_id, source, raw_text)
+    (user_id, category_id, type, amount, occurred_on, note, merchant, asset_id, source, raw_text,
+     original_amount, original_currency)
   values
     (v_user, v_category, 'expense', round(p_amount, 2), coalesce(p_occurred_on, current_date),
-     null, nullif(trim(p_merchant), ''), v_asset, 'screenshot', left(p_raw_text, 4000))
+     null, nullif(trim(p_merchant), ''), v_asset, 'screenshot', left(p_raw_text, 4000),
+     p_original_amount, nullif(upper(trim(p_original_currency)), ''))
   returning id into v_id;
 
   if v_asset is not null then
@@ -399,8 +413,8 @@ end;
 $$;
 
 -- ---------- 函数权限 ----------
-revoke all on function public.capture_transaction(text, numeric, text, text, date, text) from public;
-grant execute on function public.capture_transaction(text, numeric, text, text, date, text) to anon, authenticated;
+revoke all on function public.capture_transaction(text, numeric, text, text, date, text, numeric, text) from public;
+grant execute on function public.capture_transaction(text, numeric, text, text, date, text, numeric, text) to anon, authenticated;
 
 revoke all on function public.app_passcode_login(text, boolean) from public, anon, authenticated;
 grant execute on function public.app_passcode_login(text, boolean) to service_role;
