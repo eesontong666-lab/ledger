@@ -6,6 +6,7 @@ import { LangProvider, LangToggle, T } from "@/components/mobile/lang";
 import { TokenPanel } from "@/components/mobile/TokenPanel";
 import { ShortcutGuide } from "@/components/mobile/ShortcutGuide";
 import { ParserTester } from "@/components/mobile/ParserTester";
+import { DownloadShortcut } from "@/components/mobile/DownloadShortcut";
 
 const list = "list-decimal space-y-2 pl-5 text-[14px] leading-relaxed text-white/70";
 
@@ -64,15 +65,15 @@ export default async function AutomationPage() {
         <T zh="② 添加快捷指令" en="② Add the shortcut" />
       </SectionLabel>
       <Panel className="p-5">
-        <a href={fileUrl} download="Ledger Screenshot.shortcut" className={primaryButton}>
+        <DownloadShortcut fileUrl={fileUrl} fileName="Ledger Screenshot.shortcut" className={primaryButton}>
           ⬇︎ <T zh="下载快捷指令" en="Download Shortcut" />
-        </a>
+        </DownloadShortcut>
         <ol className={`${list} mt-4`}>
           <T
             zh={
               <>
                 <li>
-                  点上面的按钮，出现询问时点 <b>下载</b>。
+                  点上面的按钮（会跳到 Safari），出现询问时点 <b>下载</b>。
                 </li>
                 <li>
                   点开下载好的文件 <b>Ledger Screenshot</b>（Safari 地址栏的 ↓ 图标，或「文件」App 的「下载」文件夹），会打开「快捷指令」App。
@@ -88,7 +89,7 @@ export default async function AutomationPage() {
             en={
               <>
                 <li>
-                  Tap the button above. When asked, tap <b>Download</b>.
+                  Tap the button above (it switches to Safari). When asked, tap <b>Download</b>.
                 </li>
                 <li>
                   Open the downloaded file <b>Ledger Screenshot</b> (the ↓ icon in Safari&apos;s address bar, or the <b>Downloads</b> folder in the Files app). The <b>Shortcuts</b> app opens.
@@ -117,9 +118,9 @@ export default async function AutomationPage() {
                 💡 遇到认不出的商家，或超市、网购这种什么都卖的店，记账后手机会弹出选单问你「这笔算哪一类？」，点一下就好。按取消也没关系，这笔会留在首页的「还没分类」里。
                 <br />
                 如果新版快捷指令在你的手机上出错，可以改用不会弹选单的{" "}
-                <a href={basicFileUrl} download="Ledger Screenshot Basic.shortcut" className="text-[#f0a3b3] underline">
+                <DownloadShortcut fileUrl={basicFileUrl} fileName="Ledger Screenshot Basic.shortcut" className="text-[#f0a3b3] underline">
                   基本版
-                </a>
+                </DownloadShortcut>
                 。
               </>
             }
@@ -128,9 +129,9 @@ export default async function AutomationPage() {
                 💡 For merchants it does not recognise, and for stores that sell everything (supermarkets, online shopping), a menu pops up after logging asking “which category?”. Tap one. Cancelling is fine: the entry waits under “not categorised yet” on the home screen.
                 <br />
                 If this shortcut misbehaves on your phone, use the{" "}
-                <a href={basicFileUrl} download="Ledger Screenshot Basic.shortcut" className="text-[#f0a3b3] underline">
+                <DownloadShortcut fileUrl={basicFileUrl} fileName="Ledger Screenshot Basic.shortcut" className="text-[#f0a3b3] underline">
                   basic version
-                </a>{" "}
+                </DownloadShortcut>{" "}
                 without the menu.
               </>
             }
