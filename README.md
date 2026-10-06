@@ -15,6 +15,15 @@ A phone-only bookkeeping app for iPhone: double-tap the back of the phone on a p
 
 ---
 
+## 👉 一步一步的安装教学 · Step-by-step setup guide
+
+**https://eesontong666-lab.github.io/ledger/**
+
+用手机或电脑打开，照着每一步点就可以（中文 / English）。
+Open it on your phone or computer and follow each step.
+
+---
+
 ## 安装（大约 10 分钟，只做一次）· Install (about 10 minutes, once)
 
 你需要两个免费账号 / You need two free accounts:

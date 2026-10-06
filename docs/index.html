@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ledger · 安装教学</title>
+<meta name="description" content="一步一步装好你自己的手机记账 App。Step-by-step setup for your own bookkeeping app.">
+<meta name="theme-color" content="#0b1512">
+<style>
+  :root {
+    --bg: #0b1512; --panel: #12211c; --panel-2: #172a23; --line: rgba(255,255,255,.08);
+    --text: #eef5f1; --dim: rgba(238,245,241,.62); --faint: rgba(238,245,241,.38);
+    --green: #3fbf8f; --green-deep: #1f7a5a; --gold: #e9c46a; --warn: #f4a261;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
+    font-size: 16px; line-height: 1.65; -webkit-font-smoothing: antialiased;
+    min-height: 100dvh; display: flex; justify-content: center;
+  }
+  .wrap { width: 100%; max-width: 560px; padding: max(env(safe-area-inset-top), 18px) 18px calc(env(safe-area-inset-bottom) + 28px); display: flex; flex-direction: column; min-height: 100dvh; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .01em; }
+  .logo { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(150deg, #1f7a5a, #0f4d3a 45%, #072a21); display: grid; place-items: center; box-shadow: 0 3px 0 #041a14; }
+  .logo::after { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid #9fd6b0; }
+  .lang { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .lang button { border: 0; background: none; color: var(--dim); font: inherit; font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 999px; cursor: pointer; }
+  .lang button[aria-pressed="true"] { background: var(--green-deep); color: #fff; }
+
+  .progress { display: flex; gap: 5px; margin-bottom: 8px; }
+  .progress i { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,.1); transition: background .25s; }
+  .progress i.done { background: var(--green); }
+  .progress i.now { background: var(--gold); }
+  .count { font-size: 13px; color: var(--faint); margin-bottom: 14px; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 26px; padding: 24px 22px; box-shadow: 0 6px 0 #060d0b; flex: 1; display: flex; flex-direction: column; }
+  .icon { font-size: 52px; line-height: 1; margin-bottom: 14px; }
+  h1 { font-size: 25px; line-height: 1.3; margin: 0 0 10px; letter-spacing: -.01em; text-wrap: balance; }
+  p { margin: 0 0 12px; color: var(--dim); }
+  p b, li b { color: var(--text); font-weight: 650; }
+  ol, ul { margin: 0 0 14px; padding-left: 0; list-style: none; counter-reset: n; }
+  ol li { counter-increment: n; position: relative; padding: 10px 0 10px 40px; color: var(--dim); border-top: 1px solid var(--line); }
+  ol li:first-child { border-top: 0; }
+  ol li::before { content: counter(n); position: absolute; left: 0; top: 10px; width: 27px; height: 27px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line); color: var(--gold); font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+  ul li { padding: 5px 0 5px 22px; position: relative; color: var(--dim); }
+  ul li::before { content: "•"; position: absolute; left: 6px; color: var(--green); }
+  .tag { display: inline-block; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 1px 8px; color: var(--text); font-weight: 600; font-size: .94em; white-space: nowrap; }
+  .note { border-radius: 16px; padding: 12px 14px; font-size: 14.5px; margin: 0 0 14px; }
+  .note.tip { background: rgba(63,191,143,.1); border: 1px solid rgba(63,191,143,.28); color: #cdeee0; }
+  .note.warn { background: rgba(244,162,97,.1); border: 1px solid rgba(244,162,97,.32); color: #ffe1c7; }
+
+  .go { display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; text-align: center; background: linear-gradient(180deg, #48cc99, #2a9d74); color: #04140e; font-weight: 750; font-size: 17px; padding: 15px 18px; border-radius: 18px; box-shadow: 0 5px 0 #17624a; margin: 4px 0 16px; transition: transform .08s, box-shadow .08s; }
+  .go:active { transform: translateY(4px); box-shadow: 0 1px 0 #17624a; }
+  .go small { font-weight: 600; opacity: .7; font-size: 13px; }
+
+  .nav { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-top: 18px; }
+  .nav button { font: inherit; font-weight: 700; font-size: 16px; border-radius: 999px; padding: 14px; cursor: pointer; border: 1px solid var(--line); }
+  .back { background: transparent; color: var(--dim); }
+  .back:disabled { opacity: .3; cursor: default; }
+  .next { background: var(--gold); color: #2b2206; border-color: transparent; box-shadow: 0 4px 0 #8d7430; }
+  .next:active { transform: translateY(3px); box-shadow: 0 1px 0 #8d7430; }
+  .spacer { flex: 1; }
+  footer { text-align: center; font-size: 12.5px; color: var(--faint); margin-top: 16px; }
+  [data-lang] { display: none; }
+  html[data-l="zh"] [data-lang="zh"], html[data-l="en"] [data-lang="en"] { display: revert; }
+  section.step { display: none; flex-direction: column; flex: 1; }
+  section.step.on { display: flex; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="logo"></span><span>Ledger</span></div>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-set="zh">中</button>
+      <button type="button" data-set="en">EN</button>
+    </div>
+  </header>
+
+  <div class="progress" id="progress"></div>
+  <div class="count" id="count"></div>
+
+  <main class="card" id="card">
+
+    <!-- 0 -->
+    <section class="step">
+      <div class="icon">📱</div>
+      <div data-lang="zh">
+        <h1>装一个属于你自己的记账 App</h1>
+        <p>付款之后，<b>轻点 iPhone 背面两下</b>，它就自动截图、读出金额和商家，帮你记一笔。</p>
+        <ul>
+          <li>完全免费，资料只属于你自己</li>
+          <li>只用一个 6 位密码进入，不用邮箱登录</li>
+          <li>外币会自动换成马币，认得常见商家</li>
+        </ul>
+        <p><b>你需要：</b>一台 iPhone，大约 10–15 分钟。全程照着这里一步一步点就可以，不用懂电脑。</p>
+        <div class="note tip">💡 前面 3 步（注册和安装）用电脑做比较顺；只有手机也可以。后面的步骤要在 iPhone 上做。</div>
+      </div>
+      <div data-lang="en">
+        <h1>Set up your own bookkeeping app</h1>
+        <p>After you pay, <b>double-tap the back of your iPhone</b>. It takes a screenshot, reads the amount and merchant, and logs the expense for you.</p>
+        <ul>
+          <li>Completely free, and the data is yours alone</li>
+          <li>One 6-digit passcode, no email login</li>
+          <li>Foreign currencies are converted to RM; common merchants are recognised</li>
+        </ul>
+        <p><b>You need:</b> an iPhone and about 10–15 minutes. Just follow each step here; no technical knowledge needed.</p>
+        <div class="note tip">💡 The first 3 steps (sign-up and install) are smoother on a computer, but a phone works too. The later steps are done on your iPhone.</div>
+      </div>
+    </section>
+
+    <!-- 1 GitHub -->
+    <section class="step">
+      <div class="icon">🐙</div>
+      <div data-lang="zh">
+        <h1>注册 GitHub（免费）</h1>
+        <p>GitHub 用来存放你这一份 App 的代码。你之后不需要再打开它。</p>
+        <a class="go" href="https://github.com/signup" target="_blank" rel="noopener">打开 GitHub 注册 <small>↗</small></a>
+        <ol>
+          <li>填邮箱、设一个密码、取一个用户名。</li>
+          <li>到邮箱收验证码，填进去。</li>
+          <li>看到 GitHub 的首页就完成了，回到这一页。</li>
+        </ol>
+        <div class="note tip">已经有 GitHub 账号？直接点「下一步」。</div>
+      </div>
+      <div data-lang="en">
+        <h1>Sign up for GitHub (free)</h1>
+        <p>GitHub stores your copy of the app's code. You won't need to open it again afterwards.</p>
+        <a class="go" href="https://github.com/signup" target="_blank" rel="noopener">Open GitHub sign-up <small>↗</small></a>
+        <ol>
+          <li>Enter your email, choose a password and a username.</li>
+          <li>Check your email for the code and enter it.</li>
+          <li>When you see the GitHub home page you are done. Come back here.</li>
+        </ol>
+        <div class="note tip">Already have a GitHub account? Just tap Next.</div>
+      </div>
+    </section>
+
+    <!-- 2 Vercel -->
+    <section class="step">
+      <div class="icon">▲</div>
+      <div data-lang="zh">
+        <h1>注册 Vercel（免费）</h1>
+        <p>Vercel 是让你的 App 在网上运作的地方。</p>
+        <a class="go" href="https://vercel.com/signup" target="_blank" rel="noopener">打开 Vercel 注册 <small>↗</small></a>
+        <ol>
+          <li>方案选 <span class="tag">Hobby</span>（免费的那个），填你的名字。</li>
+          <li>点 <span class="tag">Continue with GitHub</span>。</li>
+          <li>GitHub 问你要不要授权，点绿色的 <span class="tag">Authorize Vercel</span>。</li>
+          <li>如果要你验证手机号码，照做就可以。</li>
+        </ol>
+        <div class="note warn">⚠️ 一定要选 <b>Continue with GitHub</b>，不要用邮箱注册，下一步才接得上。</div>
+      </div>
+      <div data-lang="en">
+        <h1>Sign up for Vercel (free)</h1>
+        <p>Vercel is where your app runs on the internet.</p>
+        <a class="go" href="https://vercel.com/signup" target="_blank" rel="noopener">Open Vercel sign-up <small>↗</small></a>
+        <ol>
+          <li>Choose the <span class="tag">Hobby</span> plan (the free one) and enter your name.</li>
+          <li>Tap <span class="tag">Continue with GitHub</span>.</li>
+          <li>GitHub asks for permission: tap the green <span class="tag">Authorize Vercel</span>.</li>
+          <li>If it asks to verify your phone number, do so.</li>
+        </ol>
+        <div class="note warn">⚠️ Be sure to choose <b>Continue with GitHub</b>, not email, or the next step will not connect.</div>
+      </div>
+    </section>
+
+    <!-- 3 Deploy -->
+    <section class="step">
+      <div class="icon">🚀</div>
+      <div data-lang="zh">
+        <h1>安装你的 App</h1>
+        <p>点下面的按钮，然后在打开的页面里照顺序做 3 件事。</p>
+        <a class="go" id="deploy-zh" href="#" target="_blank" rel="noopener">开始安装 <small>↗</small></a>
+        <ol>
+          <li><b>Create Git Repository</b><br>名字不用改，直接点 <span class="tag">Create</span>。如果它先要你安装 GitHub 的权限，点 <span class="tag">Install</span>，选 <b>All repositories</b>。</li>
+          <li><b>Add Supabase</b>（这是存账本的数据库）<br>点 <span class="tag">Add</span> → 同意条款 → Region 选 <span class="tag">Singapore</span> → Plan 选 <span class="tag">Free</span> → 点 <span class="tag">Create</span>。</li>
+          <li><b>Deploy</b><br>点 <span class="tag">Deploy</span>，等大约 2 分钟，直到出现彩带和 Congratulations。</li>
+        </ol>
+        <div class="note tip">💡 这一页先不要关。安装好之后回来点「下一步」。</div>
+      </div>
+      <div data-lang="en">
+        <h1>Install your app</h1>
+        <p>Tap the button below, then do these 3 things in order on the page that opens.</p>
+        <a class="go" id="deploy-en" href="#" target="_blank" rel="noopener">Start install <small>↗</small></a>
+        <ol>
+          <li><b>Create Git Repository</b><br>Keep the name and tap <span class="tag">Create</span>. If it first asks to install GitHub access, tap <span class="tag">Install</span> and choose <b>All repositories</b>.</li>
+          <li><b>Add Supabase</b> (the database that stores your ledger)<br>Tap <span class="tag">Add</span> → accept the terms → Region <span class="tag">Singapore</span> → Plan <span class="tag">Free</span> → tap <span class="tag">Create</span>.</li>
+          <li><b>Deploy</b><br>Tap <span class="tag">Deploy</span> and wait about 2 minutes until you see confetti and Congratulations.</li>
+        </ol>
+        <div class="note tip">💡 Keep this page open. Come back and tap Next when the install has finished.</div>
+      </div>
+    </section>
+
+    <!-- 4 Find your address -->
+    <section class="step">
+      <div class="icon">🔗</div>
+      <div data-lang="zh">
+        <h1>找到你的 App 网址</h1>
+        <ol>
+          <li>在 Congratulations 的画面，点 <span class="tag">Continue to Dashboard</span>。</li>
+          <li>页面上有一行 <b>Domains</b>，下面那个以 <span class="tag">.vercel.app</span> 结尾的就是你的网址，例如 <b>my-ledger-abc.vercel.app</b>。</li>
+          <li>把这个网址发到你自己的 WhatsApp 或备忘录，等下要在 iPhone 上打开。</li>
+        </ol>
+        <div class="note warn">⚠️ 这个网址就是你的账本入口，<b>不要发给别人</b>。</div>
+      </div>
+      <div data-lang="en">
+        <h1>Find your app's address</h1>
+        <ol>
+          <li>On the Congratulations screen, tap <span class="tag">Continue to Dashboard</span>.</li>
+          <li>Look for <b>Domains</b>. The one ending in <span class="tag">.vercel.app</span> is your address, for example <b>my-ledger-abc.vercel.app</b>.</li>
+          <li>Send that address to yourself (WhatsApp or Notes). You will open it on your iPhone next.</li>
+        </ol>
+        <div class="note warn">⚠️ This address is the door to your ledger. <b>Do not share it.</b></div>
+      </div>
+    </section>
+
+    <!-- 5 Passcode -->
+    <section class="step">
+      <div class="icon">🔒</div>
+      <div data-lang="zh">
+        <h1>设置你的 6 位密码</h1>
+        <ol>
+          <li>在 iPhone 上用 <b>Safari</b> 打开你的网址。</li>
+          <li>画面会出现数字键盘，写着「设置 6 位密码」。输入你想要的 6 个数字。</li>
+          <li>再输入一次确认，就会进到 App 的首页。</li>
+        </ol>
+        <div class="note warn">⚠️ 安装好之后请<b>马上</b>做这一步。第一个设密码的人就是这本账的主人。</div>
+        <div class="note tip">以后每次打开 App 只需要这 6 个数字。连续输错 5 次会锁 15 分钟。</div>
+      </div>
+      <div data-lang="en">
+        <h1>Set your 6-digit passcode</h1>
+        <ol>
+          <li>On your iPhone, open your address in <b>Safari</b>.</li>
+          <li>A number pad appears saying “设置 6 位密码” (set a 6-digit passcode). Enter the 6 digits you want.</li>
+          <li>Enter them again to confirm. You land on the app's home screen.</li>
+        </ol>
+        <div class="note warn">⚠️ Do this <b>right after</b> installing. Whoever sets the passcode first owns the ledger.</div>
+        <div class="note tip">From now on those 6 digits are all you need. Five wrong tries lock it for 15 minutes.</div>
+      </div>
+    </section>
+
+    <!-- 6 Home screen -->
+    <section class="step">
+      <div class="icon">➕</div>
+      <div data-lang="zh">
+        <h1>加到主屏幕</h1>
+        <p>这样它就像一个普通的 App，有自己的图标。</p>
+        <ol>
+          <li>在 Safari 里点底部中间的 <b>分享</b> 按钮（一个方框加向上的箭头）。</li>
+          <li>往下滑，点 <span class="tag">添加到主屏幕</span>（Add to Home Screen）。</li>
+          <li>点右上角的 <span class="tag">添加</span>。</li>
+        </ol>
+        <p>回到主屏幕，会看到一个绿色的图标。以后从这里打开。</p>
+      </div>
+      <div data-lang="en">
+        <h1>Add it to your Home Screen</h1>
+        <p>It then behaves like a normal app with its own icon.</p>
+        <ol>
+          <li>In Safari, tap the <b>Share</b> button at the bottom centre (a square with an arrow pointing up).</li>
+          <li>Scroll down and tap <span class="tag">Add to Home Screen</span>.</li>
+          <li>Tap <span class="tag">Add</span> at the top right.</li>
+        </ol>
+        <p>Back on your Home Screen you will see a green icon. Open the app from there from now on.</p>
+      </div>
+    </section>
+
+    <!-- 7 Accounts -->
+    <section class="step">
+      <div class="icon">🏦</div>
+      <div data-lang="zh">
+        <h1>加上你的银行账户</h1>
+        <ol>
+          <li>打开 App，点底部第二个图标 <b>👛 账户</b>。</li>
+          <li>点 <span class="tag">＋ 添加账户</span>。</li>
+          <li>填名称（例如 Maybank、日常开销）和现在的余额，点 <span class="tag">保存</span>。</li>
+        </ol>
+        <p>有几个账户就加几个。投资和信用卡欠款也可以在同一个地方加。</p>
+        <div class="note tip">💡 App 的界面是中文。看不懂的地方可以截图问把这个链接发给你的朋友。</div>
+      </div>
+      <div data-lang="en">
+        <h1>Add your bank accounts</h1>
+        <ol>
+          <li>Open the app and tap the second icon at the bottom, <b>👛 账户</b> (Accounts).</li>
+          <li>Tap <span class="tag">＋ 添加账户</span> (Add account).</li>
+          <li>Enter a name (for example Maybank, Daily Expenses) and the current balance, then tap <span class="tag">保存</span> (Save).</li>
+        </ol>
+        <p>Add as many as you have. Investments and credit-card debt go in the same place.</p>
+        <div class="note tip">💡 The app's interface is in Chinese. If something is unclear, send a screenshot to the friend who gave you this link.</div>
+      </div>
+    </section>
+
+    <!-- 8 Shortcut -->
+    <section class="step">
+      <div class="icon">📸</div>
+      <div data-lang="zh">
+        <h1>开启「敲两下自动记账」</h1>
+        <p>这一步请<b>用 Safari 打开你的网址</b>来做（不要用主屏幕的图标）。</p>
+        <ol>
+          <li>点底部最右边的 <b>⚙️ 设置</b> → <span class="tag">📲 截图记账</span>。右上角可以切换 中 / EN。</li>
+          <li><b>① 生成专属链接</b>，然后点 <span class="tag">复制</span>。它只显示一次。</li>
+          <li><b>② 下载快捷指令</b> → 点 <span class="tag">下载</span> → 点开下载好的文件 → 长按输入框 <span class="tag">粘贴</span> → <span class="tag">添加快捷指令</span>。</li>
+          <li><b>③</b> 到 iPhone 的 <b>设置 → 辅助功能 → 触控 → 轻点背面 → 轻点两下</b>，选 <span class="tag">Ledger Screenshot</span>。</li>
+        </ol>
+        <div class="note tip">英文系统的路径是：Settings → Accessibility → Touch → Back Tap → Double Tap。</div>
+      </div>
+      <div data-lang="en">
+        <h1>Turn on “double-tap to log”</h1>
+        <p>Do this step with <b>your address open in Safari</b> (not from the Home Screen icon).</p>
+        <ol>
+          <li>Tap <b>⚙️ 设置</b> (Settings) at the bottom right → <span class="tag">📲 截图记账</span>. Switch to <b>EN</b> at the top right.</li>
+          <li><b>① Generate my link</b>, then tap <span class="tag">Copy</span>. It is shown only once.</li>
+          <li><b>② Download Shortcut</b> → tap <span class="tag">Download</span> → open the downloaded file → long-press the box and <span class="tag">Paste</span> → <span class="tag">Add Shortcut</span>.</li>
+          <li><b>③</b> On your iPhone go to <b>Settings → Accessibility → Touch → Back Tap → Double Tap</b> and choose <span class="tag">Ledger Screenshot</span>.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 9 Try it -->
+    <section class="step">
+      <div class="icon">🎉</div>
+      <div data-lang="zh">
+        <h1>试一笔</h1>
+        <ol>
+          <li>打开银行 App 里任何一笔付款成功或交易详情的画面。</li>
+          <li><b>轻点手机背面两下。</b></li>
+          <li>第一次会问几次权限，都选 <span class="tag">始终允许</span>（Always Allow）。</li>
+          <li>几秒后会出现通知：<b>✅ 已记账 RM8.00 · 商家</b>。</li>
+        </ol>
+        <p>如果它不确定这笔算哪一类，会弹出选单让你点「食 / 衣 / 住 / 行 / 其他」。</p>
+        <div class="note tip"><b>之后要知道的两件事</b><br>• 超过一星期没用，数据库会自动休眠。到 supabase.com/dashboard 登录，点 <b>Restore</b> 就恢复，资料不会丢。<br>• 忘记密码：在 Supabase 的 Table Editor 打开 <b>app_passcode</b>，把 <b>passcode_hash</b> 清空，再打开 App 就能重新设置。</div>
+      </div>
+      <div data-lang="en">
+        <h1>Try one</h1>
+        <ol>
+          <li>Open any payment-success or transaction-detail screen in your banking app.</li>
+          <li><b>Double-tap the back of your phone.</b></li>
+          <li>The first time it asks for permission a few times. Choose <span class="tag">Always Allow</span>.</li>
+          <li>A few seconds later a notification appears: <b>✅ 已记账 RM8.00 · merchant</b>.</li>
+        </ol>
+        <p>If it is not sure about the category, a menu pops up: 食 food · 衣 shopping · 住 home · 行 transport · 其他 other.</p>
+        <div class="note tip"><b>Two things for later</b><br>• After about a week without use the database goes to sleep. Sign in at supabase.com/dashboard and tap <b>Restore</b>; nothing is lost.<br>• Forgot the passcode: in Supabase → Table Editor → <b>app_passcode</b>, clear <b>passcode_hash</b>, then open the app to set a new one.</div>
+      </div>
+    </section>
+
+    <div class="spacer"></div>
+    <div class="nav">
+      <button type="button" class="back" id="back"><span data-lang="zh">上一步</span><span data-lang="en">Back</span></button>
+      <button type="button" class="next" id="next"></button>
+    </div>
+  </main>
+
+  <footer>
+    <span data-lang="zh">卡住了？把画面截图，发给把这个链接给你的朋友。</span>
+    <span data-lang="en">Stuck? Send a screenshot to the friend who gave you this link.</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var DEPLOY = "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Feesontong666-lab%2Fledger&project-name=my-ledger&repository-name=my-ledger&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22supabase%22%2C%22productSlug%22%3A%22supabase%22%2C%22protocol%22%3A%22storage%22%7D%5D";
+  var NEXT = {
+    zh: ["开始", "做好了，下一步", "做好了，下一步", "安装好了，下一步", "记下来了，下一步", "设好了，下一步", "加好了，下一步", "加好了，下一步", "设好了，下一步", "从头再看一次"],
+    en: ["Start", "Done, next", "Done, next", "Installed, next", "Saved it, next", "Passcode set, next", "Added, next", "Added, next", "All set, next", "Start over"]
+  };
+  var root = document.documentElement;
+  var steps = [].slice.call(document.querySelectorAll("section.step"));
+  var progress = document.getElementById("progress");
+  var count = document.getElementById("count");
+  var back = document.getElementById("back");
+  var next = document.getElementById("next");
+  document.getElementById("deploy-zh").href = DEPLOY;
+  document.getElementById("deploy-en").href = DEPLOY;
+
+  function read(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function write(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
+
+  var lang = read("ledger-guide-lang") || ((navigator.language || "").toLowerCase().indexOf("zh") === 0 ? "zh" : "en");
+  var index = Math.min(steps.length - 1, Math.max(0, parseInt(read("ledger-guide-step") || "0", 10) || 0));
+
+  steps.forEach(function () { progress.appendChild(document.createElement("i")); });
+
+  function render() {
+    root.setAttribute("data-l", lang);
+    root.lang = lang === "zh" ? "zh-CN" : "en";
+    [].forEach.call(document.querySelectorAll(".lang button"), function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set") === lang));
+    });
+    steps.forEach(function (s, i) { s.classList.toggle("on", i === index); });
+    [].forEach.call(progress.children, function (bar, i) {
+      bar.className = i < index ? "done" : i === index ? "now" : "";
+    });
+    count.textContent = index === 0 ? "" : (lang === "zh" ? "第 " + index + " 步，共 " + (steps.length - 1) + " 步" : "Step " + index + " of " + (steps.length - 1));
+    back.disabled = index === 0;
+    next.textContent = NEXT[lang][index];
+    write("ledger-guide-step", String(index));
+  }
+
+  function go(to) {
+    index = Math.min(steps.length - 1, Math.max(0, to));
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  back.addEventListener("click", function () { go(index - 1); });
+  next.addEventListener("click", function () { go(index === steps.length - 1 ? 0 : index + 1); });
+  [].forEach.call(document.querySelectorAll(".lang button"), function (b) {
+    b.addEventListener("click", function () { lang = b.getAttribute("data-set"); write("ledger-guide-lang", lang); render(); });
+  });
+  render();
+})();
+</script>
+</body>
+</html>
