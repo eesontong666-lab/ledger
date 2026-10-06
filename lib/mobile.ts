@@ -1,5 +1,8 @@
 // 手机版共用的展示工具
 
+/** 截图记账的账户设定里「每次都问我」这个选项的值 */
+export const ASK_ACCOUNT = "__ask__";
+
 /** 记收入时账户下拉里「按比例分配」这个选项的值 */
 export const SPLIT_CHOICE = "__split__";
 

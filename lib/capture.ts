@@ -91,9 +91,11 @@ export async function handleCapture(request: Request, token: string | undefined)
   const who = parsed.merchant ? ` · ${parsed.merchant}` : "";
   const from = original ? `（${formatForeign(original.amount, original.currency)}）` : "";
   // 数据库可能用了“用户以前给这个商家选的分类”，以它返回的为准
-  const result = (saved ?? {}) as { id?: string; category?: string; needs_review?: boolean };
+  const result = (saved ?? {}) as SavedOne;
   const category = result.category ?? parsed.categoryLabel;
   const summary = `${rm(amountMYR)}${from}${who}`;
+  // 有好几个账户、又认不出是哪一个：让快捷指令弹出账户选单
+  const accountAsk = result.needs_account && result.id ? accountQuestion(result.id, result.accounts, summary) : {};
   const tail = filedUnder;
 
   // 分类拿不准：这笔已经先记下了（暂时放在 category），同时让快捷指令弹出选单问用户。
@@ -103,6 +105,7 @@ export async function handleCapture(request: Request, token: string | undefined)
       parsed,
       amountMYR,
       category,
+      ...accountAsk,
       ask: 1,
       id: result.id,
       remember: parsed.ask === "unknown" ? 1 : 0,
@@ -114,10 +117,35 @@ export async function handleCapture(request: Request, token: string | undefined)
     });
   }
 
-  return reply(200, `✅ 已记账 ${summary} · ${category}${tail}`, { parsed, amountMYR, category });
+  const into = result.account ? ` → ${result.account}` : "";
+  return reply(200, `✅ 已记账 ${summary} · ${category}${into}${tail}`, {
+    parsed,
+    amountMYR,
+    category,
+    id: result.id,
+    ...accountAsk,
+  });
 }
 
 type Db = ReturnType<typeof createClient<Database>>;
+
+// capture_transaction 返回的东西
+type SavedOne = {
+  id?: string;
+  category?: string;
+  needs_review?: boolean;
+  needs_account?: boolean;
+  /** 已经自动记到的账户名字（没有就是 null） */
+  account?: string | null;
+  /** 需要问的时候，用户所有账户的名字 */
+  accounts?: string[] | null;
+};
+
+/** 让快捷指令弹出“用哪个账户付的？”所需要的栏位。ids 可以是一个 id，或用逗号隔开的好几个。 */
+function accountQuestion(ids: string, accounts: string[] | null | undefined, what: string) {
+  if (!accounts?.length) return {};
+  return { ask_account: 1, ids, account_question: `${what}\n用哪个账户付的？`, account_choices: accounts };
+}
 
 /** 所有支出分类（包括用户自己加的），照顺序排好，附上选单要显示的文字 */
 async function expenseChoices(supabase: Db): Promise<{ label: string; text: string }[]> {
@@ -160,11 +188,7 @@ async function captureList(supabase: Db, token: string, text: string, list: List
     return reply(500, `记账失败：${error.message}`);
   }
 
-  const result = (data ?? {}) as {
-    added?: number;
-    skipped?: number;
-    results?: { skipped?: boolean; category?: string; needs_review?: boolean }[];
-  };
+  const result = (data ?? {}) as { added?: number; skipped?: number; results?: (SavedOne & { skipped?: boolean })[] };
   const added = result.added ?? 0;
   const skipped = result.skipped ?? 0;
   if (added === 0) {
@@ -183,7 +207,16 @@ async function captureList(supabase: Db, token: string, text: string, list: List
     `✅ 记了 ${added} 笔，共 ${rm(total)}` +
     (skipped > 0 ? `（跳过 ${skipped} 笔已经记过的）` : "") +
     (pending > 0 ? `。${pending} 笔还没分类，打开 App 选一下` : "");
-  return reply(200, [head, ...shown].join("\n"), { added, skipped, pending });
+  // 这张截图里的几笔要一起问“用哪个账户付的”
+  const needAccount = rows.filter((r) => r.needs_account && r.id);
+  const accountAsk = needAccount.length
+    ? accountQuestion(
+        needAccount.map((r) => r.id).join(","),
+        needAccount[0].accounts,
+        `${needAccount.length} 笔，共 ${rm(needAccount.reduce((sum, r) => sum + r.item.amount, 0))}`,
+      )
+    : {};
+  return reply(200, [head, ...shown].join("\n"), { added, skipped, pending, ...accountAsk });
 }
 
 /** 快捷指令弹出选单后，把用户选的那一项送回来（body: { id, category: 选单上的文字, remember }） */
@@ -216,4 +249,29 @@ export async function handleSetCategory(request: Request, token: string | undefi
     return reply(500, "分类没有保存成功，请打开 App 再选一次。");
   }
   return reply(200, `👌 已归到「${label.replace("支出", "")}」`, { category: label });
+}
+
+/** 快捷指令弹出账户选单后，把用户选的账户送回来（body: { ids, account: 账户名字 }） */
+export async function handleSetAccount(request: Request, token: string | undefined) {
+  if (!token) return reply(401, "缺少密钥。");
+  let body: { ids?: unknown; id?: unknown; account?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return reply(400, "读不到你选的账户。");
+  }
+
+  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  const { data, error } = await supabase.rpc("capture_set_account", {
+    p_token: token,
+    p_ids: String(body.ids ?? body.id ?? ""),
+    p_account_name: String(body.account ?? ""),
+  });
+  if (error) {
+    if (error.message.includes("invalid token")) return reply(401, "密钥无效或已重新生成。");
+    return reply(500, "账户没有保存成功，请打开 App 再选一次。");
+  }
+  const result = (data ?? {}) as { account?: string; balance?: number; count?: number };
+  const many = (result.count ?? 1) > 1 ? `${result.count} 笔都` : "";
+  return reply(200, `👌 ${many}记到 ${result.account}，余额 ${rm(Number(result.balance ?? 0))}`, result);
 }

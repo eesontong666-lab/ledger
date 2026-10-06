@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { categoryEmoji, dayHeading, monthRange, rm, todayISO, withinLastHours } from "@/lib/mobile";
-import { updateTransactionCategory } from "@/lib/actions/mobile";
+import { setTransactionAccount, updateTransactionCategory } from "@/lib/actions/mobile";
 import { HomeFeed, type FeedItem } from "@/components/mobile/HomeFeed";
 import { Panel } from "@/components/mobile/ui";
 import { formatForeign } from "@/lib/fx";
@@ -14,7 +14,7 @@ export default async function HomePage() {
     await Promise.all([
       supabase
         .from("transactions")
-        .select("id, type, amount, occurred_on, note, merchant, category_id, asset_id, source, created_at, original_amount, original_currency, needs_review")
+        .select("id, type, amount, occurred_on, note, merchant, category_id, asset_id, source, created_at, original_amount, original_currency, needs_review, needs_account")
         .order("occurred_on", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(200),
@@ -57,7 +57,7 @@ export default async function HomePage() {
   const backfilledDays = [...new Set(backfilled.map((t) => t.occurred_on))].sort();
 
   // 截图记账时拿不准分类的那些：放在最上面让用户点一下
-  const pending = (txs ?? []).filter((t) => t.needs_review).slice(0, 5);
+  const pending = (txs ?? []).filter((t) => t.needs_review || t.needs_account).slice(0, 5);
   const choices = (categories ?? [])
     .filter((c) => c.type === "expense")
     .map((c) => ({ id: c.id, label: c.label_zh, icon: c.icon }));
@@ -66,31 +66,54 @@ export default async function HomePage() {
     <>
       {pending.length > 0 && (
         <section className="mb-5 rounded-3xl border border-[#e9a84a]/40 bg-[#e9a84a]/[0.08] p-4">
-          <p className="mb-3 text-[13px] font-semibold text-[#f3c57c]">
-            🤔 {pending.length} 笔还没分类，点一下告诉我是哪一类
-          </p>
-          <div className="flex flex-col gap-3">
+          <p className="mb-3 text-[13px] font-semibold text-[#f3c57c]">🤔 {pending.length} 笔还差一点资料，点一下补上</p>
+          <div className="flex flex-col gap-4">
             {pending.map((t) => (
-              <form key={t.id} action={updateTransactionCategory.bind(null, t.id)}>
+              <div key={t.id}>
                 <div className="mb-1.5 flex items-baseline justify-between gap-3">
                   <span className="truncate text-[15px] font-semibold">{t.merchant || "（没读到商家）"}</span>
                   <span className="shrink-0 text-[15px] font-semibold text-rose-400">{rm(Number(t.amount))}</span>
                 </div>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {choices.map((c) => (
-                    <button
-                      key={c.id}
-                      type="submit"
-                      name="category_id"
-                      value={c.id}
-                      className="flex flex-col items-center gap-0.5 rounded-xl border border-white/10 bg-[#1c1f28] py-2 active:scale-95 active:border-[#d9748a]"
-                    >
-                      <span className="text-lg leading-none">{categoryEmoji(c.label, c.icon)}</span>
-                      <span className="max-w-full truncate px-0.5 text-[11px] text-white/80">{c.label.replace("支出", "")}</span>
-                    </button>
-                  ))}
-                </div>
-              </form>
+                {t.needs_account && (
+                  <form action={setTransactionAccount.bind(null, t.id)} className="mb-2">
+                    <p className="mb-1 text-[11px] text-white/45">用哪个账户付的？</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(assets ?? []).map((a) => (
+                        <button
+                          key={a.id}
+                          type="submit"
+                          name="asset_id"
+                          value={a.id}
+                          className="max-w-full truncate rounded-xl border border-white/10 bg-[#1c1f28] px-3 py-2 text-[13px] text-white/85 active:scale-95 active:border-[#d9748a]"
+                        >
+                          🏦 {a.name}
+                        </button>
+                      ))}
+                    </div>
+                  </form>
+                )}
+                {t.needs_review && (
+                  <form action={updateTransactionCategory.bind(null, t.id)}>
+                    <p className="mb-1 text-[11px] text-white/45">这笔算哪一类？</p>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {choices.map((c) => (
+                        <button
+                          key={c.id}
+                          type="submit"
+                          name="category_id"
+                          value={c.id}
+                          className="flex min-w-0 flex-col items-center gap-0.5 rounded-xl border border-white/10 bg-[#1c1f28] py-2 active:scale-95 active:border-[#d9748a]"
+                        >
+                          <span className="text-lg leading-none">{categoryEmoji(c.label, c.icon)}</span>
+                          <span className="max-w-full truncate px-0.5 text-[11px] text-white/80">
+                            {c.label.replace("支出", "")}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </form>
+                )}
+              </div>
             ))}
           </div>
         </section>

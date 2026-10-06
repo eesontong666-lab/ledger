@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { CategoryType } from "@/lib/types";
-import { PROTECTED_CATEGORIES, SPLIT_CHOICE, splitIncome, todayISO } from "@/lib/mobile";
+import { ASK_ACCOUNT, PROTECTED_CATEGORIES, SPLIT_CHOICE, splitIncome, todayISO } from "@/lib/mobile";
 import { identifyMerchant } from "@/lib/brands";
 
 async function requireUser() {
@@ -355,12 +355,25 @@ export async function generateCaptureToken(): Promise<{ token: string }> {
   return { token };
 }
 
+/** 把一笔交易挂到某个账户（或换账户、或不挂），余额会跟着调 */
+export async function setTransactionAccount(id: string, formData: FormData) {
+  const { supabase } = await requireUser();
+  const assetId = (formData.get("asset_id") as string) || null;
+  const { error } = await supabase.rpc("set_transaction_account", { p_id: id, p_asset_id: assetId });
+  if (error) throw new Error(error.message);
+  revalidateMobile();
+  revalidatePath(`/tx/${id}`);
+}
+
 export async function setCaptureDefaultAccount(formData: FormData) {
   const { supabase, user } = await requireUser();
-  const assetId = (formData.get("asset_id") as string) || null;
+  // ASK_ACCOUNT = 每次都问；空 = 不记到任何账户；其他 = 固定记到这个账户
+  const choice = (formData.get("asset_id") as string) || "";
+  const ask = choice === ASK_ACCOUNT;
+  const assetId = ask || !choice ? null : choice;
   const { error } = await supabase
     .from("capture_tokens")
-    .update({ default_asset_id: assetId })
+    .update({ default_asset_id: assetId, ask_account: ask })
     .eq("user_id", user.id);
   if (error) throw new Error(error.message);
   revalidatePath("/settings/automation");

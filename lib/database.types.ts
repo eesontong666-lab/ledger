@@ -82,6 +82,7 @@ export type Database = {
       }
       capture_tokens: {
         Row: {
+          ask_account: boolean
           created_at: string
           default_asset_id: string | null
           last_used_at: string | null
@@ -89,6 +90,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ask_account?: boolean
           created_at?: string
           default_asset_id?: string | null
           last_used_at?: string | null
@@ -96,6 +98,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ask_account?: boolean
           created_at?: string
           default_asset_id?: string | null
           last_used_at?: string | null
@@ -318,6 +321,7 @@ export type Database = {
           created_at: string
           id: string
           merchant: string | null
+          needs_account: boolean
           needs_review: boolean
           note: string | null
           occurred_on: string
@@ -335,6 +339,7 @@ export type Database = {
           id?: string
           asset_id?: string | null
           merchant?: string | null
+          needs_account?: boolean
           needs_review?: boolean
           note?: string | null
           original_amount?: number | null
@@ -352,6 +357,7 @@ export type Database = {
           id?: string
           asset_id?: string | null
           merchant?: string | null
+          needs_account?: boolean
           needs_review?: boolean
           note?: string | null
           original_amount?: number | null
@@ -398,6 +404,11 @@ export type Database = {
         Args: { p_token: string; p_items: Json; p_raw_text: string }
         Returns: Json
       }
+      capture_set_account: {
+        Args: { p_token: string; p_ids: string; p_account_name: string }
+        Returns: Json
+      }
+      set_transaction_account: { Args: { p_id: string; p_asset_id: string | null }; Returns: number }
       capture_set_category: {
         Args: { p_token: string; p_id: string; p_category_label: string; p_remember?: boolean }
         Returns: Json

@@ -9,6 +9,7 @@ A phone-only bookkeeping app for iPhone: double-tap the back of the phone on a p
 - 🧠 认得常见商家（McDonald's、Petronas、Grab…），认不出时弹出选单问你，选过一次就记住 / recognises common merchants, asks when unsure, remembers your answer
 - 🧾 一张截图里有好几笔交易（银行的活动列表）也能一次记下，不会重复 / one screenshot of your activity list logs every expense in it
 - 🏷️ 分类可以自己加 / add your own categories
+- 🏦 有好几个账户时，记账后会问你是用哪一个付的 / asks which account you paid with
 - 💱 外币（USD、USDT、SGD…）自动按消费当天的汇率换成马币 / foreign currencies converted to RM
 - 👕🍜🏠🚗 分类：衣、食、住、行、其他
 - 🏦 银行账户、投资、负债，各自的进出记录

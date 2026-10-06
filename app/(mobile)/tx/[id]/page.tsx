@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { deleteMobileTransaction, updateTransactionCategory } from "@/lib/actions/mobile";
-import { BackHeader, Panel } from "@/components/mobile/ui";
+import { deleteMobileTransaction, setTransactionAccount, updateTransactionCategory } from "@/lib/actions/mobile";
+import { BackHeader, Panel, fieldClass, pinkButton } from "@/components/mobile/ui";
 import { categoryEmoji, dayHeading, rm } from "@/lib/mobile";
 import { formatForeign } from "@/lib/fx";
 import { identifyMerchant } from "@/lib/brands";
@@ -12,16 +12,16 @@ export default async function TransactionDetailPage({ params }: { params: Promis
   const { data: tx } = await supabase.from("transactions").select("*").eq("id", id).single();
   if (!tx) notFound();
 
-  const [{ data: categories }, { data: asset }] = await Promise.all([
+  const [{ data: categories }, { data: assets }] = await Promise.all([
     supabase.from("categories").select("id, label_zh, sort_order, icon").eq("type", tx.type).order("sort_order"),
-    tx.asset_id
-      ? supabase.from("assets").select("name").eq("id", tx.asset_id).single()
-      : Promise.resolve({ data: null }),
+    supabase.from("assets").select("id, name").order("created_at"),
   ]);
 
   const current = (categories ?? []).find((c) => c.id === tx.category_id);
   const label = current?.label_zh ?? "其他";
+  const asset = (assets ?? []).find((a) => a.id === tx.asset_id);
   const changeCategory = updateTransactionCategory.bind(null, id);
+  const changeAccount = setTransactionAccount.bind(null, id);
   const { label: day, weekday } = dayHeading(tx.occurred_on);
 
   async function remove() {
@@ -95,6 +95,21 @@ export default async function TransactionDetailPage({ params }: { params: Promis
           </div>
         ))}
       </Panel>
+
+      <form action={changeAccount} className="mt-4 flex gap-2">
+        <select name="asset_id" defaultValue={tx.asset_id ?? ""} aria-label="账户" className={fieldClass}>
+          <option value="">不记到任何账户</option>
+          {(assets ?? []).map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        <button type="submit" className={`${pinkButton} shrink-0`}>
+          换账户
+        </button>
+      </form>
+      <p className="mt-2 px-1 text-xs text-white/40">换账户时，两个账户的余额会自动跟着调整。</p>
 
       {tx.raw_text && (
         <details className="mt-4 rounded-2xl border border-white/[0.07] bg-[#1c1f28] px-5 py-3 text-sm">

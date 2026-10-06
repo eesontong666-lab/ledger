@@ -6,6 +6,7 @@ import { LangProvider, LangToggle, T } from "@/components/mobile/lang";
 import { TokenPanel } from "@/components/mobile/TokenPanel";
 import { ShortcutGuide } from "@/components/mobile/ShortcutGuide";
 import { ParserTester } from "@/components/mobile/ParserTester";
+import { ASK_ACCOUNT } from "@/lib/mobile";
 import { DownloadShortcut } from "@/components/mobile/DownloadShortcut";
 
 const list = "list-decimal space-y-2 pl-5 text-[14px] leading-relaxed text-white/70";
@@ -26,7 +27,7 @@ export default async function AutomationPage() {
   const basicFileUrl = `${origin}/${encodeURIComponent("Ledger Screenshot Basic.shortcut")}`;
 
   const [{ data: token }, { data: assets }] = await Promise.all([
-    supabase.from("capture_tokens").select("created_at, last_used_at, default_asset_id").maybeSingle(),
+    supabase.from("capture_tokens").select("created_at, last_used_at, default_asset_id, ask_account").maybeSingle(),
     supabase.from("assets").select("id, name").order("created_at"),
   ]);
 
@@ -115,7 +116,7 @@ export default async function AutomationPage() {
           <T
             zh={
               <>
-                💡 遇到认不出的商家，或超市、网购这种什么都卖的店，记账后手机会弹出选单问你「这笔算哪一类？」，点一下就好。按取消也没关系，这笔会留在首页的「还没分类」里。
+                💡 记账后手机可能会弹出两个选单：「用哪个账户付的？」（你有好几个账户时），和「这笔算哪一类？」（认不出商家，或超市、网购这种什么都卖的店）。各点一下就好。按取消也没关系，这笔会留在首页等你补上。
                 <br />
                 如果新版快捷指令在你的手机上出错，可以改用不会弹选单的{" "}
                 <DownloadShortcut fileUrl={basicFileUrl} fileName="Ledger Screenshot Basic.shortcut" className="text-[#f0a3b3] underline">
@@ -126,7 +127,7 @@ export default async function AutomationPage() {
             }
             en={
               <>
-                💡 For merchants it does not recognise, and for stores that sell everything (supermarkets, online shopping), a menu pops up after logging asking “which category?”. Tap one. Cancelling is fine: the entry waits under “not categorised yet” on the home screen.
+                💡 After logging, up to two menus may pop up: “which account did you pay with?” (when you have several accounts) and “which category?” (unknown merchants, or stores that sell everything). Tap one in each. Cancelling is fine: the entry waits on the home screen for you to finish.
                 <br />
                 If this shortcut misbehaves on your phone, use the{" "}
                 <DownloadShortcut fileUrl={basicFileUrl} fileName="Ledger Screenshot Basic.shortcut" className="text-[#f0a3b3] underline">
@@ -182,13 +183,18 @@ export default async function AutomationPage() {
           </SectionLabel>
           <Panel className="p-4">
             <form action={setCaptureDefaultAccount} className="flex gap-2">
-              <select name="asset_id" defaultValue={token.default_asset_id ?? ""} className={fieldClass}>
-                <option value="">— 不指定 / None —</option>
+              <select
+                name="asset_id"
+                defaultValue={token.ask_account ? ASK_ACCOUNT : (token.default_asset_id ?? "")}
+                className={fieldClass}
+              >
+                <option value={ASK_ACCOUNT}>每次都问我 / Ask me every time</option>
                 {(assets ?? []).map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
                 ))}
+                <option value="">不记到账户 / No account</option>
               </select>
               <button type="submit" className={`${pinkButton} shrink-0`}>
                 <T zh="保存" en="Save" />
@@ -196,8 +202,8 @@ export default async function AutomationPage() {
             </form>
             <p className="mt-2 text-xs text-white/40">
               <T
-                zh="选了账户后，每笔截图记账会自动从该账户余额扣除。"
-                en="Once an account is chosen, every screenshot entry is deducted from that account's balance."
+                zh="「每次都问我」：记账后手机会弹出你的账户让你点是用哪一个付的（只有一个账户时不会问）。选固定的账户：每笔都自动从那个账户扣。"
+                en="“Ask me every time”: after logging, a menu lists your accounts so you can tap the one you paid with (not asked if you have only one). A fixed account: every entry is deducted from it automatically."
               />
             </p>
           </Panel>

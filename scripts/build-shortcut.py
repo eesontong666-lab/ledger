@@ -5,13 +5,16 @@
 # 文件里不含任何网址或密钥：添加时 iPhone 会问用户贴上自己的“专属链接”。
 #
 # 流程：截屏 → 提取文字 → POST 到专属链接 → 通知结果
-#       → 如果服务器回了 ask（分类拿不准）→ 弹出选单 → 把选的分类 POST 到 专属链接/category → 再通知一次
+#       → 如果服务器回了 ask_account（不知道用哪个账户）→ 弹出账户选单 → POST 到 专属链接/account → 通知
+#       → 如果服务器回了 ask（分类拿不准）→ 弹出分类选单 → POST 到 专属链接/category → 通知
 import plistlib, uuid
 
 U = lambda: str(uuid.uuid4()).upper()
 u_link, u_shot, u_text, u_res, u_msg, u_ask = U(), U(), U(), U(), U(), U()
 u_q, u_choices, u_pick, u_id, u_rem, u_res2, u_msg2 = U(), U(), U(), U(), U(), U(), U()
+u_aask, u_aq, u_achoices, u_apick, u_ids, u_res3, u_msg3 = U(), U(), U(), U(), U(), U(), U()
 group = U()
+group_account = U()
 
 def attach(uid, name):
     return {"Value": {"OutputUUID": uid, "Type": "ActionOutput", "OutputName": name}, "WFSerializationType": "WFTextTokenAttachment"}
@@ -45,6 +48,22 @@ actions = [
     post(u_res, var_text(u_link, "Text"), [("text", var_text(u_text, "Text from Image"))]),
     get_value(u_msg, "message", u_res),
     notify(u_msg),
+    # 服务器不知道用哪个账户付的时候才会回 ask_account
+    get_value(u_aask, "ask_account", u_res),
+    action("conditional", GroupingIdentifier=group_account, WFControlFlowMode=0, WFCondition=100,
+           WFInput={"Type": "Variable", "Variable": attach(u_aask, "Dictionary Value")}),
+    get_value(u_aq, "account_question", u_res),
+    get_value(u_achoices, "account_choices", u_res),
+    action("choosefromlist", UUID=u_apick, WFInput=attach(u_achoices, "Dictionary Value"),
+           WFChooseFromListActionPrompt=var_text(u_aq, "Dictionary Value")),
+    get_value(u_ids, "ids", u_res),
+    post(u_res3, var_text(u_link, "Text", "/account"), [
+        ("ids", var_text(u_ids, "Dictionary Value")),
+        ("account", var_text(u_apick, "Chosen Item")),
+    ]),
+    get_value(u_msg3, "message", u_res3),
+    notify(u_msg3),
+    action("conditional", GroupingIdentifier=group_account, WFControlFlowMode=2, UUID=U()),
     # 服务器只有在分类拿不准时才会回 ask；没有这个值就到此结束
     get_value(u_ask, "ask", u_res),
     action("conditional", GroupingIdentifier=group, WFControlFlowMode=0, WFCondition=100,
