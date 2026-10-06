@@ -10,7 +10,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
 
   const [{ data: txs }, { data: categories }] = await Promise.all([
     supabase.from("transactions").select("type, amount, occurred_on, category_id").gte("occurred_on", start).lt("occurred_on", end),
-    supabase.from("categories").select("id, label_zh, type, sort_order").order("sort_order"),
+    supabase.from("categories").select("id, label_zh, type, sort_order, icon").order("sort_order").order("label_zh"),
   ]);
 
   const expenses = (txs ?? []).filter((t) => t.type === "expense");
@@ -25,7 +25,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   }
   const ranked = (categories ?? [])
     .filter((c) => c.type === "expense")
-    .map((c) => ({ id: c.id, label: c.label_zh, ...(byCategory.get(c.id) ?? { amount: 0, count: 0 }) }))
+    .map((c) => ({ id: c.id, label: c.label_zh, icon: c.icon, ...(byCategory.get(c.id) ?? { amount: 0, count: 0 }) }))
     .sort((x, y) => y.amount - x.amount);
   const ym = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -88,7 +88,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
           return (
             <Link key={r.id} href={`/stats/${r.id}?m=${ym}`} className="block py-3 active:opacity-60">
               <div className="flex items-center gap-3">
-                <span className="text-2xl">{categoryEmoji(r.label)}</span>
+                <span className="text-2xl">{categoryEmoji(r.label, r.icon)}</span>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{r.label}</p>
                   <p className="text-[11px] text-white/40">

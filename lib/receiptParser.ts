@@ -232,3 +232,129 @@ export function parseReceipt(text: string, today: Date = new Date()): ParsedRece
     occurredOn: findDate(text, today),
   };
 }
+
+// ======================================================================
+// 一张截图里有好几笔交易（银行 App 的活动 / 交易记录列表）
+// ======================================================================
+
+export type ListEntry = {
+  amount: number;
+  merchant: string | null;
+  categoryLabel: string;
+  ask: ParsedReceipt["ask"];
+  occurredOn: string | null; // 列表里的日期标题；读不到就是 null（当作今天）
+};
+
+// 任何金额（不管正负）。MONEY_RE 带 g 旗标，.test() 会记住位置，所以这里另做一个不带 g 的。
+const ANY_MONEY_RE = new RegExp(MONEY_RE.source, "i");
+// 支出的金额前面有减号：“-RM 6.00”。收入（+RM）和没有符号的不算。
+const DEBIT_RE = new RegExp(`[-−–]\\s*(${TOKEN})\\s*(${NUM})|[-−–]\\s*(${NUM})\\s*(${TOKEN})(?![A-Za-z])`, "i");
+// 只有“单笔交易详情”才会出现的栏位：看到就不是列表
+const DETAIL_MARKERS =
+  /^(reference id|transaction type|payment details|transaction no\.?|wallet ref|recipient reference|payment method|paid from|paid to|pay to)$/i;
+// 每一行交易下面的小字（付款方式、状态、时间），不是商家名字
+const SUBTITLE_RE =
+  /^(duitnow|card|fpx|transfers?|payment|pending|completed|successful|success|debit|credit|e-?wallet|online|pos|qr|physical|virtual|main account|savings account|today|yesterday|今天|昨天|see all|view all|all|filter|search|activity|transactions?|history|spent|income|expenses?|money (in|out))\b/i;
+const TIME_ONLY_RE = /^\d{1,2}[:.]\d{2}\s*(am|pm)?$/i;
+const SUMMARY_RE = /total|spent|balance|baki|余额|available|总共|合计/i;
+
+/** 单独一行的日期标题：“Today”、“5 Oct 2026”、“Mon, 5 Oct”、“05/10/2026” */
+function headerDate(line: string, today: Date): string | null | undefined {
+  const t = line.trim();
+  if (t.length > 26 || DEBIT_RE.test(t)) return undefined;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  if (/^(today|今天|hari ini)$/i.test(t)) return iso(today);
+  if (/^(yesterday|昨天|semalam)$/i.test(t)) return iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1));
+  const full = findDate(t, today);
+  if (full) return full;
+  // 没写年份：“5 Oct”、“Mon, 5 Oct”、“Oct 5”。当作今年；如果那样会是未来，就是去年。
+  const m = t.match(/^(?:[A-Za-z]{3,9},?\s+)?(\d{1,2})\s+([A-Za-z]{3})[a-z]*$/) ?? null;
+  const m2 = t.match(/^(?:[A-Za-z]{3,9},?\s+)?([A-Za-z]{3})[a-z]*\s+(\d{1,2})$/) ?? null;
+  const day = m ? +m[1] : m2 ? +m2[2] : null;
+  const month = MONTHS[(m ? m[2] : m2 ? m2[1] : "").toLowerCase()];
+  if (!day || !month) return undefined;
+  let date = new Date(today.getFullYear(), month - 1, day);
+  if (date > today) date = new Date(today.getFullYear() - 1, month - 1, day);
+  return date.getMonth() === month - 1 ? iso(date) : undefined;
+}
+
+function isRowName(line: string, today: Date): boolean {
+  const t = line.trim();
+  return (
+    /\p{L}{2,}/u.test(t) &&
+    !SUBTITLE_RE.test(t) &&
+    !TIME_ONLY_RE.test(t) &&
+    !SUMMARY_RE.test(t) &&
+    !looksLikeReference(t) &&
+    !looksLikeNoise(t) &&
+    headerDate(t, today) === undefined
+  );
+}
+
+/**
+ * 认出“列表”截图并拆成一笔一笔。不是列表（少于两笔支出，或是单笔详情页）时返回 null，
+ * 调用方改用 parseReceipt。只认马币、且前面有减号的金额。
+ */
+export function parseReceiptList(text: string, today: Date = new Date()): ListEntry[] | null {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.some((l) => DETAIL_MARKERS.test(l))) return null;
+
+  type Row = { index: number; amount: number; inline: string };
+  const rows: Row[] = [];
+  lines.forEach((line, index) => {
+    if (SUMMARY_RE.test(line)) return;
+    const match = line.match(DEBIT_RE);
+    if (!match) return;
+    const currency = currencyCode(match[1] ?? match[4]);
+    if (currency !== "MYR") return;
+    const amount = toAmount(match[2] ?? match[3], currency);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    // 名字和金额在同一行的排版：“Setel   -RM 20.00”
+    rows.push({ index, amount, inline: line.slice(0, match.index).replace(/[\s·•|:-]+$/, "").trim() });
+  });
+  if (rows.length < 2) return null;
+
+  // 一笔交易占几行。它的范围到“分界线”为止：别的金额（包括收入）、日期标题、合计那一行。
+  const isBoundary = lines.map(
+    (l) => ANY_MONEY_RE.test(l) || SUMMARY_RE.test(l) || headerDate(l, today) !== undefined,
+  );
+  const nameAbove = (r: Row) => {
+    if (isRowName(r.inline, today)) return r.inline;
+    let from = r.index;
+    while (from > 0 && !isBoundary[from - 1]) from--;
+    return lines.slice(from, r.index).find((l) => isRowName(l, today)) ?? null;
+  };
+  const nameBelow = (r: Row) => {
+    let to = r.index + 1;
+    while (to < lines.length && !isBoundary[to]) to++;
+    return lines.slice(r.index + 1, to).find((l) => isRowName(l, today)) ?? null;
+  };
+  // 多数银行是“名字在上、金额在下”。第一笔上面没有名字、下面有，才是“金额在上”的排版。
+  const amountFirst = nameAbove(rows[0]) === null && nameBelow(rows[0]) !== null;
+  const names = rows.map(amountFirst ? nameBelow : nameAbove);
+
+  // 日期标题管它下面的所有交易，直到下一个标题
+  const dateAt = (index: number): string | null => {
+    for (let i = index; i >= 0; i--) {
+      const d = headerDate(lines[i], today);
+      if (d) return d;
+    }
+    return null;
+  };
+
+  return rows.map((r, i) => {
+    const raw = names[i];
+    const known = identifyMerchant(raw);
+    return {
+      amount: r.amount,
+      merchant: known?.name ?? raw,
+      categoryLabel: known?.category ?? "其他支出",
+      ask: !known ? "unknown" : known.askEveryTime ? "mixed" : null,
+      occurredOn: dateAt(r.index),
+    };
+  });
+}

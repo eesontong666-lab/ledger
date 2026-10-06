@@ -13,13 +13,14 @@ export default async function TransactionDetailPage({ params }: { params: Promis
   if (!tx) notFound();
 
   const [{ data: categories }, { data: asset }] = await Promise.all([
-    supabase.from("categories").select("id, label_zh, sort_order").eq("type", tx.type).order("sort_order"),
+    supabase.from("categories").select("id, label_zh, sort_order, icon").eq("type", tx.type).order("sort_order"),
     tx.asset_id
       ? supabase.from("assets").select("name").eq("id", tx.asset_id).single()
       : Promise.resolve({ data: null }),
   ]);
 
-  const label = (categories ?? []).find((c) => c.id === tx.category_id)?.label_zh ?? "其他";
+  const current = (categories ?? []).find((c) => c.id === tx.category_id);
+  const label = current?.label_zh ?? "其他";
   const changeCategory = updateTransactionCategory.bind(null, id);
   const { label: day, weekday } = dayHeading(tx.occurred_on);
 
@@ -49,7 +50,7 @@ export default async function TransactionDetailPage({ params }: { params: Promis
       <BackHeader title="交易详情" href="/home" />
       <div className="flex flex-col items-center py-6">
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#2a2e3a] text-5xl">
-          {categoryEmoji(label)}
+          {categoryEmoji(label, current?.icon)}
         </div>
         <p className="mt-3 text-lg font-semibold">{tx.merchant || tx.note || label}</p>
         <p className={`mt-1 text-4xl font-bold ${tx.type === "income" ? "text-emerald-400" : "text-rose-400"}`}>
@@ -58,7 +59,7 @@ export default async function TransactionDetailPage({ params }: { params: Promis
         </p>
       </div>
 
-      <form action={changeCategory} className="mb-4 flex gap-2">
+      <form action={changeCategory} className="mb-4 grid grid-cols-5 gap-2">
         {(categories ?? []).map((c) => {
           const active = c.id === tx.category_id;
           return (
@@ -68,12 +69,12 @@ export default async function TransactionDetailPage({ params }: { params: Promis
               name="category_id"
               value={c.id}
               aria-pressed={active}
-              className={`flex flex-1 flex-col items-center gap-1 rounded-2xl border py-2.5 transition active:scale-95 ${
+              className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl border py-2.5 transition active:scale-95 ${
                 active ? "border-[#d9748a] bg-[#d9748a]/15" : "border-white/[0.07] bg-[#1c1f28]"
               }`}
             >
-              <span className="text-xl">{categoryEmoji(c.label_zh)}</span>
-              <span className="text-[11px] text-white/80">{c.label_zh.replace("支出", "").replace("收入", "")}</span>
+              <span className="text-xl">{categoryEmoji(c.label_zh, c.icon)}</span>
+              <span className="max-w-full truncate px-1 text-[11px] text-white/80">{c.label_zh.replace("支出", "").replace("收入", "")}</span>
             </button>
           );
         })}

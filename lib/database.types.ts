@@ -394,6 +394,10 @@ export type Database = {
         }
         Returns: Json
       }
+      capture_transactions_bulk: {
+        Args: { p_token: string; p_items: Json; p_raw_text: string }
+        Returns: Json
+      }
       capture_set_category: {
         Args: { p_token: string; p_id: string; p_category_label: string; p_remember?: boolean }
         Returns: Json

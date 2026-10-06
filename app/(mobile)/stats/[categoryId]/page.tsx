@@ -20,7 +20,7 @@ export default async function CategoryDetailPage({
   const supabase = await createClient();
 
   const [{ data: category }, { data: txs }, { data: assets }, { data: monthExpenses }] = await Promise.all([
-    supabase.from("categories").select("id, label_zh, type").eq("id", categoryId).maybeSingle(),
+    supabase.from("categories").select("id, label_zh, type, icon").eq("id", categoryId).maybeSingle(),
     supabase
       .from("transactions")
       .select("id, type, amount, occurred_on, note, merchant, asset_id, source, created_at, original_amount, original_currency")
@@ -42,7 +42,7 @@ export default async function CategoryDetailPage({
     date: t.occurred_on,
     title: t.merchant || t.note || category.label_zh,
     category: category.label_zh,
-    emoji: categoryEmoji(category.label_zh),
+    emoji: categoryEmoji(category.label_zh, category.icon),
     account: t.asset_id ? (assetName.get(t.asset_id) ?? null) : null,
     fromScreenshot: t.source === "screenshot",
       original:
@@ -58,7 +58,7 @@ export default async function CategoryDetailPage({
 
   return (
     <>
-      <BackHeader title={`${categoryEmoji(category.label_zh)} ${category.label_zh}`} href={`/stats?m=${ym}`} />
+      <BackHeader title={`${categoryEmoji(category.label_zh, category.icon)} ${category.label_zh}`} href={`/stats?m=${ym}`} />
 
       <Panel className="overflow-hidden">
         <div className="px-5 pb-4 pt-5">

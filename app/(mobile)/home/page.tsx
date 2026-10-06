@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { CATEGORY_CHOICES, categoryEmoji, dayHeading, monthRange, rm, todayISO, withinLastHours } from "@/lib/mobile";
+import { categoryEmoji, dayHeading, monthRange, rm, todayISO, withinLastHours } from "@/lib/mobile";
 import { updateTransactionCategory } from "@/lib/actions/mobile";
 import { HomeFeed, type FeedItem } from "@/components/mobile/HomeFeed";
 import { Panel } from "@/components/mobile/ui";
@@ -18,12 +18,13 @@ export default async function HomePage() {
         .order("occurred_on", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(200),
-      supabase.from("categories").select("id, label_zh, type"),
+      supabase.from("categories").select("id, label_zh, type, icon, sort_order").order("sort_order").order("label_zh"),
       supabase.from("assets").select("id, name"),
       supabase.from("transactions").select("type, amount").gte("occurred_on", start).lt("occurred_on", end),
     ]);
 
   const catName = new Map((categories ?? []).map((c) => [c.id, c.label_zh]));
+  const catIcon = new Map((categories ?? []).map((c) => [c.id, c.icon]));
   const assetName = new Map((assets ?? []).map((a) => [a.id, a.name]));
 
   const items: FeedItem[] = (txs ?? []).map((t) => {
@@ -35,7 +36,7 @@ export default async function HomePage() {
       date: t.occurred_on,
       title: t.merchant || t.note || category,
       category,
-      emoji: categoryEmoji(category),
+      emoji: categoryEmoji(category, catIcon.get(t.category_id)),
       account: t.asset_id ? (assetName.get(t.asset_id) ?? null) : null,
       fromScreenshot: t.source === "screenshot",
       original:
@@ -57,10 +58,9 @@ export default async function HomePage() {
 
   // 截图记账时拿不准分类的那些：放在最上面让用户点一下
   const pending = (txs ?? []).filter((t) => t.needs_review).slice(0, 5);
-  const choices = CATEGORY_CHOICES.map((c) => ({
-    ...c,
-    id: (categories ?? []).find((cat) => cat.type === "expense" && cat.label_zh === c.label)?.id,
-  })).filter((c): c is typeof c & { id: string } => !!c.id);
+  const choices = (categories ?? [])
+    .filter((c) => c.type === "expense")
+    .map((c) => ({ id: c.id, label: c.label_zh, icon: c.icon }));
 
   return (
     <>
@@ -85,8 +85,8 @@ export default async function HomePage() {
                       value={c.id}
                       className="flex flex-col items-center gap-0.5 rounded-xl border border-white/10 bg-[#1c1f28] py-2 active:scale-95 active:border-[#d9748a]"
                     >
-                      <span className="text-lg leading-none">{categoryEmoji(c.label)}</span>
-                      <span className="text-[11px] text-white/80">{c.label.replace("支出", "")}</span>
+                      <span className="text-lg leading-none">{categoryEmoji(c.label, c.icon)}</span>
+                      <span className="max-w-full truncate px-0.5 text-[11px] text-white/80">{c.label.replace("支出", "")}</span>
                     </button>
                   ))}
                 </div>

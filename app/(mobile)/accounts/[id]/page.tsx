@@ -22,11 +22,12 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       .order("occurred_on", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(300),
-    supabase.from("categories").select("id, label_zh"),
+    supabase.from("categories").select("id, label_zh, icon"),
   ]);
   if (!account) notFound();
 
   const catName = new Map((categories ?? []).map((c) => [c.id, c.label_zh]));
+  const catIcon = new Map((categories ?? []).map((c) => [c.id, c.icon]));
   const items: FeedItem[] = (txs ?? []).map((t) => {
     const category = catName.get(t.category_id) ?? "其他";
     return {
@@ -36,7 +37,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       date: t.occurred_on,
       title: t.merchant || t.note || category,
       category,
-      emoji: categoryEmoji(category),
+      emoji: categoryEmoji(category, catIcon.get(t.category_id)),
       account: null,
       fromScreenshot: t.source === "screenshot",
       original:

@@ -15,9 +15,13 @@ export const CATEGORY_EMOJI: Record<string, string> = {
   其他支出: "🧾",
 };
 
-export function categoryEmoji(label: string | undefined | null): string {
-  return (label && CATEGORY_EMOJI[label]) || "🧾";
+/** 分类的图标：用户自己加的分类用他选的 emoji（存在 categories.icon），内置的用上面这张表 */
+export function categoryEmoji(label: string | undefined | null, icon?: string | null): string {
+  return icon?.trim() || (label && CATEGORY_EMOJI[label]) || "🧾";
 }
+
+/** 这些分类是识别规则和收入分配会用到的，不能删 */
+export const PROTECTED_CATEGORIES = ["衣", "食", "住", "行", "其他支出", "其他收入"];
 
 export const ASSET_EMOJI: Record<string, string> = {
   cash: "💵",
@@ -137,4 +141,9 @@ export const CATEGORY_CHOICES: { label: string; text: string }[] = [
 /** 这个时间点是不是在最近 N 小时内 */
 export function withinLastHours(iso: string, hours: number): boolean {
   return Date.now() - new Date(iso).getTime() < hours * 60 * 60 * 1000;
+}
+
+/** 选单上显示的文字：内置的五类带说明，用户自己加的就是“图标 + 名字” */
+export function categoryChoiceText(label: string, icon?: string | null): string {
+  return CATEGORY_CHOICES.find((c) => c.label === label)?.text ?? `${categoryEmoji(label, icon) === "🧾" ? "🏷️" : categoryEmoji(label, icon)} ${label}`;
 }

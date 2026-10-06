@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { parseReceipt } from "@/lib/receiptParser";
-import { CATEGORY_CHOICES, dayHeading, malaysiaNow, rm, todayISO } from "@/lib/mobile";
+import { parseReceipt, parseReceiptList, type ListEntry } from "@/lib/receiptParser";
+import { CATEGORY_CHOICES, categoryChoiceText, dayHeading, malaysiaNow, rm, todayISO } from "@/lib/mobile";
 import { formatForeign, rateToMYR } from "@/lib/fx";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 
@@ -36,6 +36,12 @@ export async function handleCapture(request: Request, token: string | undefined)
 
   if (!text.trim()) return reply(400, "截图里没有识别到文字。");
 
+  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+
+  // 先看是不是“一张截图里有好几笔”的列表（银行的活动记录）
+  const list = parseReceiptList(text, malaysiaNow());
+  if (list) return captureList(supabase, token, text, list);
+
   const parsed = parseReceipt(text, malaysiaNow());
   if (!parsed.amount) {
     return reply(422, "没在截图里找到金额，这笔没有记录。", { parsed });
@@ -51,7 +57,7 @@ export async function handleCapture(request: Request, token: string | undefined)
   let amountMYR = parsed.amount;
   let original = parsed.original;
   if (parsed.currency !== "MYR") {
-    const rate = await rateToMYR(parsed.currency);
+    const rate = await rateToMYR(parsed.currency, occurredOn, today);
     if (!rate) {
       return reply(
         422,
@@ -62,12 +68,6 @@ export async function handleCapture(request: Request, token: string | undefined)
     original = { amount: parsed.amount, currency: parsed.currency };
     amountMYR = Math.max(0.01, Math.round(parsed.amount * rate * 100) / 100);
   }
-
-  const supabase = createClient<Database>(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
-    { auth: { persistSession: false } },
-  );
 
   const { data: saved, error } = await supabase.rpc("capture_transaction", {
     p_token: token,
@@ -108,11 +108,82 @@ export async function handleCapture(request: Request, token: string | undefined)
       remember: parsed.ask === "unknown" ? 1 : 0,
       question: `${summary}\n这笔算哪一类？`,
       // 把猜的那一类放最前面，通常点第一个就对
-      choices: [...CATEGORY_CHOICES].sort((a, b) => Number(b.label === category) - Number(a.label === category)).map((c) => c.text),
+      choices: (await expenseChoices(supabase))
+        .sort((a, b) => Number(b.label === category) - Number(a.label === category))
+        .map((c) => c.text),
     });
   }
 
   return reply(200, `✅ 已记账 ${summary} · ${category}${tail}`, { parsed, amountMYR, category });
+}
+
+type Db = ReturnType<typeof createClient<Database>>;
+
+/** 所有支出分类（包括用户自己加的），照顺序排好，附上选单要显示的文字 */
+async function expenseChoices(supabase: Db): Promise<{ label: string; text: string }[]> {
+  const { data } = await supabase
+    .from("categories")
+    .select("label_zh, icon, sort_order")
+    .eq("type", "expense")
+    .order("sort_order")
+    .order("label_zh");
+  const rows = data?.length ? data : CATEGORY_CHOICES.map((c) => ({ label_zh: c.label, icon: null }));
+  return rows.map((c) => ({ label: c.label_zh, text: categoryChoiceText(c.label_zh, c.icon) }));
+}
+
+// 跟数据库里的 merchant_key() 一样的算法：只留字母数字、全大写
+function merchantKey(name: string | null): string {
+  return (name ?? "").replace(/[^\p{L}\p{N}]+/gu, "").toUpperCase();
+}
+
+/** 一张截图里的好几笔交易，一次记下。已经记过的（之前敲过两下的）会跳过。 */
+async function captureList(supabase: Db, token: string, text: string, list: ListEntry[]) {
+  const today = todayISO();
+  const seen = new Map<string, number>();
+  const items = list.map((e) => {
+    const date = e.occurredOn ?? today;
+    const key = `${date}|${e.amount.toFixed(2)}|${merchantKey(e.merchant)}`;
+    const nth = (seen.get(key) ?? 0) + 1;
+    seen.set(key, nth);
+    return { amount: e.amount, merchant: e.merchant ?? "", category: e.categoryLabel, date, uncertain: e.ask !== null, nth };
+  });
+
+  const { data, error } = await supabase.rpc("capture_transactions_bulk", {
+    p_token: token,
+    p_items: items,
+    p_raw_text: text,
+  });
+  if (error) {
+    if (error.message.includes("invalid token")) {
+      return reply(401, "密钥无效或已重新生成，请更新快捷指令里的密钥。");
+    }
+    return reply(500, `记账失败：${error.message}`);
+  }
+
+  const result = (data ?? {}) as {
+    added?: number;
+    skipped?: number;
+    results?: { skipped?: boolean; category?: string; needs_review?: boolean }[];
+  };
+  const added = result.added ?? 0;
+  const skipped = result.skipped ?? 0;
+  if (added === 0) {
+    return reply(200, `这张截图里的 ${skipped} 笔都已经记过了，没有重复记。`, { added, skipped });
+  }
+
+  const rows = (result.results ?? []).map((r, i) => ({ ...r, item: items[i] })).filter((r) => r.item && !r.skipped);
+  const total = rows.reduce((sum, r) => sum + r.item.amount, 0);
+  const pending = rows.filter((r) => r.needs_review).length;
+  const shown = rows
+    .slice(0, 4)
+    .map((r) => `· ${rm(r.item.amount)} ${r.item.merchant || "（没读到商家）"} · ${(r.category ?? r.item.category).replace("支出", "")}`);
+  if (rows.length > shown.length) shown.push(`…还有 ${rows.length - shown.length} 笔`);
+
+  const head =
+    `✅ 记了 ${added} 笔，共 ${rm(total)}` +
+    (skipped > 0 ? `（跳过 ${skipped} 笔已经记过的）` : "") +
+    (pending > 0 ? `。${pending} 笔还没分类，打开 App 选一下` : "");
+  return reply(200, [head, ...shown].join("\n"), { added, skipped, pending });
 }
 
 /** 快捷指令弹出选单后，把用户选的那一项送回来（body: { id, category: 选单上的文字, remember }） */
@@ -125,12 +196,15 @@ export async function handleSetCategory(request: Request, token: string | undefi
     return reply(400, "读不到你选的分类。");
   }
 
-  const picked = String(body.category ?? "");
-  const choice = CATEGORY_CHOICES.find((c) => c.text === picked || c.label === picked) ??
-    CATEGORY_CHOICES.find((c) => c.label !== "其他支出" && picked.includes(c.label));
+  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  const picked = String(body.category ?? "").trim();
+  const all = await expenseChoices(supabase);
+  // 先找完全一样的；找不到再看选的那串字里包含哪个分类名（名字长的先比，免得“食”抢了“零食”）
+  const choice =
+    all.find((c) => c.text === picked || c.label === picked) ??
+    [...all].sort((a, b) => b.label.length - a.label.length).find((c) => c.label !== "其他支出" && picked.includes(c.label));
   const label = choice?.label ?? "其他支出";
 
-  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } });
   const { error } = await supabase.rpc("capture_set_category", {
     p_token: token,
     p_id: String(body.id ?? ""),

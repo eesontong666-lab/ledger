@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { CategoryType } from "@/lib/types";
-import { SPLIT_CHOICE, splitIncome, todayISO } from "@/lib/mobile";
+import { PROTECTED_CATEGORIES, SPLIT_CHOICE, splitIncome, todayISO } from "@/lib/mobile";
 import { identifyMerchant } from "@/lib/brands";
 
 async function requireUser() {
@@ -174,6 +174,57 @@ export async function createMobileAccount(formData: FormData) {
         });
   if (error) throw new Error(error.message);
   revalidateMobile();
+}
+
+/** 自己加一个分类 */
+export async function createCategory(_prev: unknown, formData: FormData): Promise<{ ok: boolean; message: string }> {
+  const { supabase } = await requireUser();
+  const type = formData.get("type") === "income" ? "income" : "expense";
+  const label = String(formData.get("label") ?? "").trim();
+  // 只取第一个字符当图标（一个 emoji 可能由好几个码位组成，用 Segmenter 才切得对）
+  const rawIcon = String(formData.get("icon") ?? "").trim();
+  const icon = rawIcon ? [...new Intl.Segmenter().segment(rawIcon)][0].segment : "🏷️";
+
+  if (!label) return { ok: false, message: "请填分类名称" };
+  if (label.length > 8) return { ok: false, message: "名称最多 8 个字" };
+
+  // 排在内置分类后面、“其他”前面
+  const { error } = await supabase
+    .from("categories")
+    .insert({ type, label_zh: label, icon, sort_order: type === "expense" ? 15 : 3 });
+  if (error) {
+    return { ok: false, message: error.code === "23505" ? `已经有「${label}」这个分类了` : error.message };
+  }
+  revalidateMobile();
+  revalidatePath("/settings/categories");
+  revalidatePath("/add");
+  return { ok: true, message: `✅ 已加上「${label}」` };
+}
+
+/** 删除一个分类：里面的记录会移到「其他」 */
+export async function deleteCategory(id: string) {
+  const { supabase, user } = await requireUser();
+  const { data: category } = await supabase.from("categories").select("id, type, label_zh").eq("id", id).single();
+  if (!category) return;
+  if (PROTECTED_CATEGORIES.includes(category.label_zh)) throw new Error("这个分类不能删除");
+
+  const fallbackLabel = category.type === "expense" ? "其他支出" : "其他收入";
+  const { data: fallback } = await supabase
+    .from("categories")
+    .select("id")
+    .eq("type", category.type)
+    .eq("label_zh", fallbackLabel)
+    .single();
+  if (!fallback) throw new Error("找不到「其他」分类");
+
+  await supabase.from("transactions").update({ category_id: fallback.id }).eq("category_id", id).eq("user_id", user.id);
+  await supabase.from("budgets").delete().eq("category_id", id).eq("user_id", user.id);
+  const { error } = await supabase.from("categories").delete().eq("id", id);
+  if (error) throw new Error("删除失败：还有记录在用这个分类");
+
+  revalidateMobile();
+  revalidatePath("/settings/categories");
+  revalidatePath("/add");
 }
 
 /** 改名称 / 直接改余额（银行账户、投资、负债都用这个） */

@@ -17,6 +17,7 @@ export default function SettingsPage() {
       <div className="grid grid-cols-3 gap-3">
         <Tile href="/accounts" icon="🏦" label="账户" />
         <Tile href="/accounts?tab=goals" icon="🎯" label="目标" />
+        <Tile href="/settings/categories" icon="🏷️" label="分类" />
         <Tile href="/settings/split" icon="🔀" label="收入分配" />
         <Tile href="/stats" icon="📊" label="统计" />
         <Tile href="/add" icon="✍️" label="记一笔" />

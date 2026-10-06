@@ -7,7 +7,9 @@ A phone-only bookkeeping app for iPhone: double-tap the back of the phone on a p
 - 🔒 只用一个 6 位密码进入 / one 6-digit passcode, no email login
 - 📸 截图自动记账（金额、商家、分类）/ screenshot logging via an iPhone Shortcut
 - 🧠 认得常见商家（McDonald's、Petronas、Grab…），认不出时弹出选单问你，选过一次就记住 / recognises common merchants, asks when unsure, remembers your answer
-- 💱 外币（USD、USDT、SGD…）自动按当天汇率换成马币 / foreign currencies converted to RM
+- 🧾 一张截图里有好几笔交易（银行的活动列表）也能一次记下，不会重复 / one screenshot of your activity list logs every expense in it
+- 🏷️ 分类可以自己加 / add your own categories
+- 💱 外币（USD、USDT、SGD…）自动按消费当天的汇率换成马币 / foreign currencies converted to RM
 - 👕🍜🏠🚗 分类：衣、食、住、行、其他
 - 🏦 银行账户、投资、负债，各自的进出记录
 - 🔀 收入按比例自动分进各账户 / income split across accounts
