@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { deleteMobileTransaction, setTransactionAccount, updateTransactionCategory } from "@/lib/actions/mobile";
+import { deleteMobileTransaction, updateTransactionCategory, updateTransactionDetails } from "@/lib/actions/mobile";
 import { BackHeader, Panel, fieldClass, pinkButton } from "@/components/mobile/ui";
 import { categoryEmoji, dayHeading, rm } from "@/lib/mobile";
 import { formatForeign } from "@/lib/fx";
@@ -21,7 +21,7 @@ export default async function TransactionDetailPage({ params }: { params: Promis
   const label = current?.label_zh ?? "其他";
   const asset = (assets ?? []).find((a) => a.id === tx.asset_id);
   const changeCategory = updateTransactionCategory.bind(null, id);
-  const changeAccount = setTransactionAccount.bind(null, id);
+  const saveDetails = updateTransactionDetails.bind(null, id);
   const { label: day, weekday } = dayHeading(tx.occurred_on);
 
   async function remove() {
@@ -96,20 +96,50 @@ export default async function TransactionDetailPage({ params }: { params: Promis
         ))}
       </Panel>
 
-      <form action={changeAccount} className="mt-4 flex gap-2">
-        <select name="asset_id" defaultValue={tx.asset_id ?? ""} aria-label="账户" className={fieldClass}>
-          <option value="">不记到任何账户</option>
-          {(assets ?? []).map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-        <button type="submit" className={`${pinkButton} shrink-0`}>
-          换账户
+      <form action={saveDetails} className="mt-5 flex flex-col gap-3 rounded-3xl border border-white/[0.07] bg-[#1c1f28] p-4">
+        <p className="text-[15px] font-semibold">✏️ 修改这笔</p>
+        <label className="text-xs text-white/45">
+          金额 RM
+          <input
+            name="amount"
+            required
+            inputMode="decimal"
+            defaultValue={Number(tx.amount).toFixed(2)}
+            className={`${fieldClass} mt-1`}
+          />
+        </label>
+        <label className="text-xs text-white/45">
+          {tx.type === "income" ? "来源" : "商家"}
+          <input name="merchant" defaultValue={tx.merchant ?? ""} placeholder="选填" className={`${fieldClass} mt-1`} />
+        </label>
+        <div className="grid grid-cols-2 gap-2.5">
+          <label className="text-xs text-white/45">
+            日期
+            <input type="date" name="occurred_on" required defaultValue={tx.occurred_on} className={`${fieldClass} mt-1`} />
+          </label>
+          <label className="text-xs text-white/45">
+            账户
+            <select name="asset_id" defaultValue={tx.asset_id ?? ""} className={`${fieldClass} mt-1`}>
+              <option value="">不记到账户</option>
+              {(assets ?? []).map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="text-xs text-white/45">
+          备注
+          <input name="note" defaultValue={tx.note ?? ""} placeholder="选填" className={`${fieldClass} mt-1`} />
+        </label>
+        <button type="submit" className={pinkButton}>
+          保存修改
         </button>
+        <p className="text-xs leading-relaxed text-white/40">
+          改金额或换账户时，账户的余额会自动跟着调整。分类在上面那排按钮改。
+        </p>
       </form>
-      <p className="mt-2 px-1 text-xs text-white/40">换账户时，两个账户的余额会自动跟着调整。</p>
 
       {tx.raw_text && (
         <details className="mt-4 rounded-2xl border border-white/[0.07] bg-[#1c1f28] px-5 py-3 text-sm">

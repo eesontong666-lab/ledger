@@ -409,6 +409,10 @@ export type Database = {
         Returns: Json
       }
       set_transaction_account: { Args: { p_id: string; p_asset_id: string | null }; Returns: number }
+      update_transaction_details: {
+        Args: { p_id: string; p_amount: number; p_merchant: string; p_occurred_on: string; p_note: string }
+        Returns: undefined
+      }
       capture_set_category: {
         Args: { p_token: string; p_id: string; p_category_label: string; p_remember?: boolean }
         Returns: Json

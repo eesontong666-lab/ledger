@@ -365,6 +365,32 @@ export async function setTransactionAccount(id: string, formData: FormData) {
   revalidatePath(`/tx/${id}`);
 }
 
+/** 交易详情页的「保存修改」：金额、商家、日期、备注、账户一次改完 */
+export async function updateTransactionDetails(id: string, formData: FormData) {
+  const { supabase } = await requireUser();
+  const amount = Number(String(formData.get("amount") ?? "").replace(/,/g, ""));
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("金额不正确");
+
+  const { error } = await supabase.rpc("update_transaction_details", {
+    p_id: id,
+    p_amount: amount,
+    p_merchant: String(formData.get("merchant") ?? ""),
+    p_occurred_on: String(formData.get("occurred_on") ?? ""),
+    p_note: String(formData.get("note") ?? ""),
+  });
+  if (error) throw new Error(error.message);
+
+  // 账户放在金额之后改：这样余额是用新的金额在新旧账户之间搬
+  const { error: accountError } = await supabase.rpc("set_transaction_account", {
+    p_id: id,
+    p_asset_id: (formData.get("asset_id") as string) || null,
+  });
+  if (accountError) throw new Error(accountError.message);
+
+  revalidateMobile();
+  revalidatePath(`/tx/${id}`);
+}
+
 export async function setCaptureDefaultAccount(formData: FormData) {
   const { supabase, user } = await requireUser();
   // ASK_ACCOUNT = 每次都问；空 = 不记到任何账户；其他 = 固定记到这个账户
