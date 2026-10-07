@@ -29,6 +29,7 @@ export default function SettingsPage() {
         <Tile href="/checkup" icon="🩺" label="财务体检" />
         <Tile href="/credit-cards" icon="💳" label="信用卡推荐" />
         <Tile href="/dashboard" icon="🖥️" label="完整版" />
+        <Tile href="/settings/update" icon="🔄" label="版本与更新" />
       </div>
 
       <form action={signOut} className="mt-8">

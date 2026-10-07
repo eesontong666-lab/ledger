@@ -70,8 +70,8 @@ The database tables are created automatically during deployment.
   The free Supabase plan pauses after about a week without use. Open the dashboard and click **Restore**; nothing is lost.
 - **截图识别 / Screenshot reading**：按马来西亚的 RM 付款画面调校（Ryt Bank 的交易详情最准）。别的银行可能读不准，可以在交易里手动改分类。
   Tuned for Malaysian RM payment screens (Ryt Bank works best). Other banks may be less accurate; you can fix the category on any entry.
-- **更新 / Updates**：你的这一套是独立的副本，原作者之后加的新功能不会自动出现。
-  Your copy is independent; later changes by the original author do not appear automatically.
+- **更新 / Updates**：会自动更新。你的这一份每天会去原始代码库看一次，有新版本就更新并重新部署，账本资料不受影响。在 App 的 设置 → 版本与更新 可以看状态，也可以马上更新。
+  Your copy checks the original repository once a day, updates itself and redeploys; your data is untouched. See Settings → 版本与更新 in the app.
 - 这是个人工具，不提供任何理财或投资建议。/ A personal tool; it gives no financial or investment advice.
 
 ## 开发 · Development
