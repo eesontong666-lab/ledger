@@ -1,0 +1,42 @@
+# 自动更新：每天去原始的代码库看有没有新版本，有就把这一份更新成一样的。
+# 更新后 Vercel 会自动重新部署，数据库也会在部署时自动补上新的栏位。
+# 也可以手动跑：GitHub → Actions → Update from original → Run workflow。
+#
+# 做法是直接把原始代码库的文件整份复制过来（不合并历史），所以这一份里自己改过的地方会被盖掉。
+# .github/ 这个文件夹不会被动到：GitHub 不允许自动任务修改自己。
+name: Update from original
+
+on:
+  schedule:
+    - cron: "17 19 * * *" # 每天马来西亚时间凌晨 3:17
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  UPSTREAM: https://github.com/eesontong666-lab/ledger.git
+
+jobs:
+  update:
+    # 原始代码库自己不用跑
+    if: github.repository != 'eesontong666-lab/ledger'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy the latest version
+        run: |
+          git clone --depth 1 "$UPSTREAM" "$RUNNER_TEMP/upstream"
+          rsync -a --delete --exclude .git --exclude .github "$RUNNER_TEMP/upstream/" ./
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Already up to date."
+            exit 0
+          fi
+          version=$(git -C "$RUNNER_TEMP/upstream" rev-parse --short HEAD)
+          git config user.name "ledger-updater"
+          git config user.email "ledger-updater@users.noreply.github.com"
+          git add -A
+          git commit -m "Update to $version"
+          git push
+          echo "Updated to $version."
