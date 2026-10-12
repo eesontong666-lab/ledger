@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { categoryEmoji, monthRange, rm, shiftMonth } from "@/lib/mobile";
+import { categoryEmoji, monthRange, rm, shiftMonth, todayISO, weekdayHabit, type WeekdayStat } from "@/lib/mobile";
 import { Panel, SectionLabel } from "@/components/mobile/ui";
 
 export default async function StatsPage({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
@@ -33,6 +33,21 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   const daily = Array.from({ length: daysInMonth }, () => 0);
   for (const t of expenses) daily[Number(t.occurred_on.slice(8, 10)) - 1] += Number(t.amount);
   const maxDay = Math.max(1, ...daily);
+
+  // 消费习惯：星期一到星期日，平均每个周几花多少
+  const habit = weekdayHabit(expenses, year, month, todayISO());
+  const maxAverage = Math.max(...habit.map((h) => h.average));
+  const spentDays = habit.filter((h) => h.average > 0);
+  const top = spentDays.length ? spentDays.reduce((a, b) => (b.average > a.average ? b : a)) : null;
+  // 最少的：在已经过了的那几个周几里比（包括一分钱没花的）
+  const passed = habit.filter((h) => h.days > 0);
+  const low = top && passed.length > 1 ? passed.reduce((a, b) => (b.average < a.average ? b : a)) : null;
+  const avgOf = (days: WeekdayStat[]) => {
+    const n = days.reduce((s, h) => s + h.days, 0);
+    return n > 0 ? days.reduce((s, h) => s + h.total, 0) / n : 0;
+  };
+  const weekdayAvg = avgOf(habit.slice(0, 5));
+  const weekendAvg = avgOf(habit.slice(5));
 
   return (
     <>
@@ -79,6 +94,79 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
           <span>{Math.ceil(daysInMonth / 2)}日</span>
           <span>{daysInMonth}日</span>
         </div>
+      </Panel>
+
+      <SectionLabel>消费习惯 · 星期几花得多</SectionLabel>
+      <Panel className="p-4">
+        {!top ? (
+          <p className="py-6 text-center text-sm text-white/40">这个月还没有支出，有记录之后这里会显示你星期几花得比较多。</p>
+        ) : (
+          <>
+            <p className="text-[15px] leading-relaxed">
+              你在 <b className="text-[#f3c57c]">{top.label}</b> 花得最多，平均每个{top.label}{" "}
+              <b className="text-[#f3c57c]">{rm(top.average)}</b>
+              {low && low.label !== top.label && (
+                <span className="text-white/55">
+                  ；最少是 {low.label}，平均 {rm(low.average)}
+                </span>
+              )}
+              。
+            </p>
+
+            <div className="mt-4 flex h-32 items-end gap-2">
+              {habit.map((h) => {
+                const isTop = h.label === top.label;
+                return (
+                  <div key={h.label} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+                    <span className={`text-[10px] ${isTop ? "font-semibold text-[#f3c57c]" : "text-white/45"}`}>
+                      {h.average > 0 ? Math.round(h.average) : ""}
+                    </span>
+                    <div
+                      title={`${h.label}：平均 ${rm(h.average)}，这个月共 ${rm(h.total)}（${h.count} 笔，${h.days} 天）`}
+                      className={`w-full rounded-t-md ${isTop ? "bg-[#e9a84a]" : h.average > 0 ? "bg-[#d9748a]/70" : "bg-white/[0.06]"}`}
+                      style={{ height: `${h.average > 0 ? Math.max(5, (h.average / maxAverage) * 78) : 3}%` }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-1.5 flex gap-2">
+              {habit.map((h) => (
+                <span
+                  key={h.label}
+                  className={`flex-1 text-center text-[11px] ${h.label === top.label ? "font-semibold text-[#f3c57c]" : "text-white/45"}`}
+                >
+                  {h.label.replace("周", "")}
+                </span>
+              ))}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-white/[0.04] px-3 py-2">
+                <p className="text-[11px] text-white/40">周一到周五 · 平均每天</p>
+                <p className="font-semibold">{rm(weekdayAvg)}</p>
+              </div>
+              <div className="rounded-xl bg-white/[0.04] px-3 py-2">
+                <p className="text-[11px] text-white/40">周六周日 · 平均每天</p>
+                <p className="font-semibold">{rm(weekendAvg)}</p>
+              </div>
+            </div>
+
+            <div className="mt-3 divide-y divide-white/[0.06] text-[13px]">
+              {habit.map((h) => (
+                <div key={h.label} className="flex items-center justify-between py-1.5">
+                  <span className={h.label === top.label ? "font-semibold text-[#f3c57c]" : "text-white/70"}>{h.label}</span>
+                  <span className="text-white/45">
+                    {h.count} 笔 · 共 {rm(h.total)} · 平均 <b className="text-white/85">{rm(h.average)}</b>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/35">
+              平均 = 这个月那一天的总支出 ÷ 已经过了几个那一天。柱子上的数字是平均（RM）。
+            </p>
+          </>
+        )}
       </Panel>
 
       <SectionLabel>支出分类</SectionLabel>

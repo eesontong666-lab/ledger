@@ -150,3 +150,47 @@ export function withinLastHours(iso: string, hours: number): boolean {
 export function categoryChoiceText(label: string, icon?: string | null): string {
   return CATEGORY_CHOICES.find((c) => c.label === label)?.text ?? `${categoryEmoji(label, icon) === "🧾" ? "🏷️" : categoryEmoji(label, icon)} ${label}`;
 }
+
+export type WeekdayStat = {
+  /** 周一 … 周日 */
+  label: string;
+  /** 这个月所有这一天加起来 */
+  total: number;
+  /** 这个月已经过了几个这一天（例如 4 个周六）。还没到的日子不算。 */
+  days: number;
+  /** 平均每个这一天花多少 = total / days */
+  average: number;
+  count: number;
+};
+
+/**
+ * 消费习惯：星期一到星期日，哪一天花得多。
+ * 比的是“平均每个周几花多少”，不是总数：一个月里有的周几出现 5 次、有的只有 4 次，
+ * 而且这个月还没过完时，后面的日子还没机会花钱，直接比总数会不公平。
+ */
+export function weekdayHabit(
+  expenses: { amount: number | string; occurred_on: string }[],
+  year: number,
+  month: number,
+  today: string,
+): WeekdayStat[] {
+  const order = [1, 2, 3, 4, 5, 6, 0]; // 周一排第一，周日排最后
+  const stats = new Map(order.map((d) => [d, { label: WEEKDAYS[d], total: 0, days: 0, average: 0, count: 0 }]));
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  for (let day = 1; day <= daysInMonth; day++) {
+    if (`${year}-${pad(month)}-${pad(day)}` > today) break;
+    stats.get(new Date(year, month - 1, day).getDay())!.days += 1;
+  }
+  for (const t of expenses) {
+    const [y, m, d] = t.occurred_on.split("-").map(Number);
+    const stat = stats.get(new Date(y, m - 1, d).getDay())!;
+    stat.total += Number(t.amount);
+    stat.count += 1;
+  }
+  return order.map((d) => {
+    const stat = stats.get(d)!;
+    return { ...stat, average: stat.days > 0 ? stat.total / stat.days : 0 };
+  });
+}
