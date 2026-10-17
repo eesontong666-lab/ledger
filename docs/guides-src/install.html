@@ -1,0 +1,106 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>Ledger 新用户安装指南</title><link rel="stylesheet" href="base.css"></head><body>
+<div class="cover">
+  <div class="logo"><i></i></div>
+  <h1>Ledger 手机记账<br>新用户安装指南</h1>
+  <p>付款后轻点 iPhone 背面两下，自动截图、读出金额和商家，帮你记一笔。</p>
+  <div class="meta">完全免费 · 资料只属于你自己 · 大约 15 分钟 · 版本 v1.0 · 2026-10-17</div>
+</div>
+
+<h2>你会得到什么</h2>
+<ul>
+  <li><b>敲两下自动记账</b>：一张截图记一笔，或一张活动列表截图记一整天，不会重复。</li>
+  <li><b>认得常见商家</b>（McDonald's、Petronas、Grab…），分成 衣、食、住、行，也可以自己加分类。</li>
+  <li><b>拿不准就问你</b>：用哪个账户付的、这笔算哪一类，点一下就好。</li>
+  <li><b>外币自动换成马币</b>（USD、USDT、SGD…），用消费当天的汇率。</li>
+  <li><b>账户、投资、负债</b>各自的进出记录；收入可以按比例分进各个账户；储蓄目标可以绑定账户。</li>
+  <li><b>统计</b>：每个分类花多少、星期几花得最多。</li>
+  <li><b>6 位密码</b>进入，不用邮箱登录；<b>每天自动更新</b>到最新版本。</li>
+</ul>
+
+<h2>开始之前</h2>
+<div class="box">
+  <p><b>你需要：</b>一台 iPhone，和大约 15 分钟。</p>
+  <p class="muted" style="margin:0">第 1–3 步（注册和安装）用电脑做比较顺，只有手机也可以。第 4 步开始在 iPhone 上做。<br>
+  更方便的做法：用手机打开 <a href="https://eesontong666-lab.github.io/ledger/">eesontong666-lab.github.io/ledger</a>，那里有一样的步骤，一页一步，每一步都有按钮可以直接点。</p>
+</div>
+
+<h2>安装步骤</h2>
+
+<div class="step"><div class="num">1</div><div>
+  <h3>注册 GitHub（免费）</h3>
+  <p><a class="btn" href="https://github.com/signup">打开 GitHub 注册</a></p>
+  <p>填邮箱、设密码、取一个用户名，再到邮箱收验证码填进去。看到 GitHub 首页就完成了。<b>把用户名记下来</b>，以后更新会用到。已经有账号就跳过。</p>
+</div></div>
+
+<div class="step"><div class="num">2</div><div>
+  <h3>注册 Vercel（免费）</h3>
+  <p><a class="btn" href="https://vercel.com/signup">打开 Vercel 注册</a></p>
+  <ol>
+    <li>方案选 <span class="tag">Hobby</span>（免费的那个），填名字。</li>
+    <li>点 <span class="tag">Continue with GitHub</span>，再点绿色的 <span class="tag">Authorize Vercel</span>。</li>
+    <li>如果要你验证手机号码，照做。</li>
+  </ol>
+  <div class="box warn">⚠️ 一定要选 <b>Continue with GitHub</b>，不要用邮箱注册，下一步才接得上。</div>
+</div></div>
+
+<div class="step"><div class="num">3</div><div>
+  <h3>安装你的 App</h3>
+  <p><a class="btn" href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Feesontong666-lab%2Fledger&amp;project-name=my-ledger&amp;repository-name=my-ledger&amp;stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22supabase%22%2C%22productSlug%22%3A%22supabase%22%2C%22protocol%22%3A%22storage%22%7D%5D">开始安装</a></p>
+  <p>在打开的页面照顺序做三件事：</p>
+  <ol>
+    <li><b>Create Git Repository</b>：名字不用改，点 <span class="tag">Create</span>。如果先要你安装 GitHub 权限，点 <span class="tag">Install</span>，选 <b>All repositories</b>。</li>
+    <li><b>Add Supabase</b>（存账本的数据库）：点 <span class="tag">Add</span> → 同意条款 → Region 选 <span class="tag">Singapore</span> → Plan 选 <span class="tag">Free</span> → <span class="tag">Create</span>。</li>
+    <li><b>Deploy</b>：点 <span class="tag">Deploy</span>，等大约 2 分钟，看到彩带和 Congratulations 就好了。</li>
+  </ol>
+</div></div>
+
+<div class="step"><div class="num">4</div><div>
+  <h3>找到你的 App 网址</h3>
+  <p>点 <span class="tag">Continue to Dashboard</span>，在 <b>Domains</b> 下面那个以 <b>.vercel.app</b> 结尾的就是你的网址（例如 my-ledger-abc.vercel.app）。发到自己的 WhatsApp 或备忘录。</p>
+  <div class="box warn">⚠️ 这个网址是你账本的入口，<b>不要发给别人</b>。</div>
+</div></div>
+
+<div class="step"><div class="num">5</div><div>
+  <h3>设置 6 位密码（装好后马上做）</h3>
+  <p>在 iPhone 用 <b>Safari</b> 打开你的网址，输入你想要的 6 个数字，再输入一次确认。</p>
+  <p class="muted">第一个设密码的人就是账本的主人。以后打开 App 只要这 6 个数字；连错 5 次会锁 15 分钟。</p>
+</div></div>
+
+<div class="step"><div class="num">6</div><div>
+  <h3>加到主屏幕</h3>
+  <p>在 Safari 点底部的 <b>分享</b>（方框加向上箭头）→ <span class="tag">添加到主屏幕</span> → <span class="tag">添加</span>。主屏幕会出现一个绿色图标。</p>
+</div></div>
+
+<div class="step"><div class="num">7</div><div>
+  <h3>加上你的银行账户</h3>
+  <p>打开 App → 底部 <b>👛 账户</b> → <span class="tag">＋ 添加账户</span>，填名称和现在的余额。有几个加几个；投资、信用卡欠款也在这里加。</p>
+</div></div>
+
+<div class="step"><div class="num">8</div><div>
+  <h3>开启「敲两下自动记账」</h3>
+  <p>这一步<b>用 Safari 打开你的网址</b>来做（不要用主屏幕图标）。App 底部 <b>⚙️ 设置</b> → <span class="tag">📲 截图记账</span>，右上角可以切换 中 / EN。</p>
+  <ol>
+    <li><b>① 生成专属链接</b> → 点 <span class="tag">复制</span>（只显示一次）。</li>
+    <li><b>② 下载快捷指令</b> → <span class="tag">下载</span> → 点开下载好的文件 → 长按输入框 <span class="tag">粘贴</span> → <span class="tag">添加快捷指令</span>。</li>
+    <li><b>③</b> iPhone <b>设置 → 辅助功能 → 触控 → 轻点背面 → 轻点两下</b>，选 <span class="tag">Ledger Screenshot</span>。</li>
+  </ol>
+  <p class="en">English iPhone: Settings → Accessibility → Touch → Back Tap → Double Tap.</p>
+</div></div>
+
+<div class="step"><div class="num">9</div><div>
+  <h3>试一笔</h3>
+  <p>打开银行 App 任何一笔付款成功或交易详情的画面，<b>轻点手机背面两下</b>。第一次会问几次权限，都选 <span class="tag">始终允许</span>。几秒后会出现「✅ 已记账 RM… · 商家」。</p>
+  <p>可能会再弹出两个选单：<b>用哪个账户付的？</b>和<b>这笔算哪一类？</b>，各点一下就好。按取消也没关系，App 首页会留着等你补上。</p>
+</div></div>
+
+<h2>常见问题</h2>
+<table>
+  <tr><th style="width:34%">情况</th><th>怎么做</th></tr>
+  <tr><td>忘记 6 位密码</td><td>到 <a href="https://supabase.com/dashboard">supabase.com/dashboard</a> → 你的项目 → Table Editor → <b>app_passcode</b>，把 <b>passcode_hash</b> 清空，再打开 App 重新设置。账本资料不会丢。</td></tr>
+  <tr><td>很久没用，App 打不开或记不了账</td><td>Supabase 免费版大约一星期没人用会休眠。登录 <a href="https://supabase.com/dashboard">supabase.com/dashboard</a>，点 <b>Restore</b>，几分钟后恢复，资料不会丢。</td></tr>
+  <tr><td>截图读错了</td><td>点进那笔交易，金额、商家、日期、账户、分类都可以改。改过一次分类，以后同一个商家会自动用你选的。</td></tr>
+  <tr><td>想知道是不是最新版本</td><td>App → 设置 → <b>🔄 版本与更新</b>。App 每天会自动更新，账本不受影响。</td></tr>
+</table>
+
+<div class="footer">卡在哪一步，把画面截图发给把这份指南给你的朋友。<br>这是个人记账工具，不提供任何理财或投资建议。 · 在线版本：<a href="https://eesontong666-lab.github.io/ledger/">eesontong666-lab.github.io/ledger</a></div>
+</body></html>

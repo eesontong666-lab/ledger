@@ -1,0 +1,80 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>Ledger 更新指南</title><link rel="stylesheet" href="base.css"></head><body>
+<div class="cover">
+  <div class="logo"><i></i></div>
+  <h1>Ledger 手机记账<br>更新指南</h1>
+  <p>给已经装好的人：更新到最新版本，<b style="color:#fff">账本资料全部保留</b>。</p>
+  <div class="meta">只做一次 · 大约 5 分钟 · 之后每天自动更新 · 版本 v1.0 · 2026-10-17</div>
+</div>
+
+<h2>更新后什么都不会变</h2>
+<div class="box">
+  <ul style="margin:0">
+    <li>账本里的交易、账户、目标、分类：<b>全部保留</b></li>
+    <li>App 网址、6 位密码：<b>不变</b></li>
+    <li>已经装好的快捷指令：<b>照样能用</b></li>
+  </ul>
+</div>
+
+<h2>这次更新有什么新东西</h2>
+<ul>
+  <li><b>一张截图记一整天</b>：截银行的活动列表，里面每一笔支出都会记下，已经记过的自动跳过。</li>
+  <li><b>拿不准就问你</b>：截图后弹出选单问「用哪个账户付的？」「这笔算哪一类？」。</li>
+  <li><b>认得常见商家</b>（McDonald's、Petronas、BHP、Grab…），改过一次分类就记住。</li>
+  <li><b>自己加分类</b>（设置 → 🏷️ 分类），每一笔的金额、商家、日期、账户都能改。</li>
+  <li><b>外币换成马币</b>（USD、USDT、SGD…），用消费当天的汇率。</li>
+  <li><b>星期几花得最多</b>：统计页的消费习惯。</li>
+  <li><b>自动更新</b>：做完这一次，以后每天自己更新。</li>
+</ul>
+
+<h2>更新步骤</h2>
+<p class="muted">最方便的做法：用手机打开 <a href="https://eesontong666-lab.github.io/ledger/update.html">eesontong666-lab.github.io/ledger/update.html</a>，按下面一样的三步点就好，按钮都帮你准备好了。</p>
+
+<div class="step"><div class="num">1</div><div>
+  <h3>打开更新页，填你的 GitHub 用户名</h3>
+  <p><a class="btn" href="https://eesontong666-lab.github.io/ledger/update.html">打开更新页</a></p>
+  <p>填安装时注册的 GitHub 用户名。仓库名字没改过的话，保持 <b>my-ledger</b>。</p>
+  <p class="muted">不记得用户名：登录 <a href="https://github.com">github.com</a>，点右上角头像，最上面那一行就是。</p>
+</div></div>
+
+<div class="step"><div class="num">2</div><div>
+  <h3>加上自动更新</h3>
+  <p>在更新页点 <b>「打开 GitHub」</b>，内容已经帮你填好，<b>什么都不用改</b>：</p>
+  <ol>
+    <li>点右上角绿色的 <span class="tag">Commit changes…</span></li>
+    <li>弹出的框里再点一次 <span class="tag">Commit changes</span>。</li>
+  </ol>
+  <p class="muted">如果 GitHub 说文件已经存在，表示你已经有自动更新了，直接做第 3 步。</p>
+</div></div>
+
+<div class="step"><div class="num">3</div><div>
+  <h3>马上更新一次</h3>
+  <p>在更新页点 <b>「打开更新页面」</b>：</p>
+  <ol>
+    <li>点右边的 <span class="tag">Run workflow</span>，再点绿色的 <span class="tag">Run workflow</span>。</li>
+    <li>等 3–4 分钟，打开你的 App。在 <b>设置</b> 里看到 <b>🔄 版本与更新</b>，就是更新好了。</li>
+  </ol>
+  <p class="muted">不做这一步也可以，今晚会自己更新。</p>
+</div></div>
+
+<div class="step"><div class="num">4</div><div>
+  <h3>（建议）换上新的快捷指令</h3>
+  <p>想用「弹出选单问账户和分类」，要换一次快捷指令。旧的照样能记账，只是不会弹选单。</p>
+  <ol>
+    <li>用 <b>Safari</b> 打开你的 App → 设置 → <span class="tag">📲 截图记账</span>。</li>
+    <li>① 重新生成专属链接 → <span class="tag">复制</span>。</li>
+    <li>② 下载快捷指令 → 点开文件 → 粘贴链接 → 添加。</li>
+    <li>iPhone 设置 → 辅助功能 → 触控 → 轻点背面 → 轻点两下，改选新的 <span class="tag">Ledger Screenshot</span>。</li>
+  </ol>
+  <p class="muted">在同一页「截图记到哪个账户」选 <b>每次都问我</b>，记账后就会问你用哪个账户付的。</p>
+</div></div>
+
+<h2>常见问题</h2>
+<table>
+  <tr><th style="width:34%">情况</th><th>怎么做</th></tr>
+  <tr><td>第 3 步之后设置里还是没有「版本与更新」</td><td>再等几分钟，把 App 关掉重新打开。还是没有的话，到 GitHub 你的仓库 → Actions，看 Update from original 有没有红色的叉，截图发给朋友。</td></tr>
+  <tr><td>App 打不开或记不了账</td><td>可能是数据库休眠了。登录 <a href="https://supabase.com/dashboard">supabase.com/dashboard</a>，点 <b>Restore</b>。</td></tr>
+  <tr><td>以后还要再做这些吗</td><td>不用。以后每天自动更新，只有想用新的快捷指令功能时才需要重新下载快捷指令。</td></tr>
+</table>
+
+<div class="footer">卡在哪一步，把画面截图发给把这份指南给你的朋友。 · 在线版本：<a href="https://eesontong666-lab.github.io/ledger/update.html">eesontong666-lab.github.io/ledger/update.html</a></div>
+</body></html>
