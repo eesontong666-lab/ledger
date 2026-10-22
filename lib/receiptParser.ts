@@ -2,7 +2,11 @@
 // 纯函数、无依赖：服务端 /api/capture 和设置页的「测试识别」都用它。
 import { identifyMerchant } from "@/lib/brands";
 
+export type TxType = "expense" | "income";
+
 export type ParsedReceipt = {
+  /** 钱是出去（付款）还是进来（别人转给你、退款） */
+  type: TxType;
   /** 金额，单位是下面的 currency（不一定是马币） */
   amount: number | null;
   /** MYR，或截图上的外币代码（USD、USDT、SGD…） */
@@ -22,6 +26,15 @@ export type ParsedReceipt = {
 };
 
 const AMOUNT_KEYWORDS = /(amount|total|paid|payment|jumlah|金额|总额|实付|付款|charged)/i;
+// 进账的画面：看到这些字就是钱进来
+const INCOME_WORDS =
+  /\b(received|receive|money in|incoming|credited|refund(ed)?|reversal|cash ?back|deposit(ed)?|you('ve| have)? received|transfer received|diterima|terima|wang masuk)\b|已收到|收到|收款成功|入账|到账|退款/i;
+// 付款的画面：看到这些字就是钱出去（两种都有时以付款为准）
+const EXPENSE_WORDS = /\b(paid to|pay to|you paid|payment successful|purchase|spent|transfer to|withdraw(al)?)\b|付款成功|已付款|消费/i;
+// 进账时，“谁转给你的”
+const SENDER_KEYWORDS =
+  /^(received from|transfer from|from|sender|sent by|pengirim|daripada|付款人|付款方|转账人|来自)(?=\s|:|：|$)\s*[:：]?\s*/i;
+
 const MERCHANT_KEYWORDS =
   /^(pay to|paid to|transfer to|to|merchant|merchant name|payment details|recipient|receiver|收款方|商家|收款人|penerima)(?=\s|:|：|$)\s*[:：]?\s*/i;
 
@@ -135,8 +148,20 @@ function looksLikeReference(line: string): boolean {
   return /^[A-Z0-9|]{8,}$/i.test(t) && (t.match(/\d/g)?.length ?? 0) >= 5;
 }
 
-function findMerchant(lines: string[]): string | null {
+function findMerchant(lines: string[], type: TxType = "expense"): string | null {
+  // 进账：先找“From / 来自”后面那个人
+  if (type === "income") {
+    for (let i = 0; i < lines.length; i++) {
+      if (!SENDER_KEYWORDS.test(lines[i])) continue;
+      const rest = lines[i].replace(SENDER_KEYWORDS, "").trim();
+      if (rest.length >= 2 && !looksLikeNoise(rest)) return rest;
+      const next = lines[i + 1]?.trim();
+      if (next && !looksLikeNoise(next) && !looksLikeReference(next)) return next;
+    }
+  }
   for (let i = 0; i < lines.length; i++) {
+    // 进账时 “To Main Account” 指的是你自己的账户，不是对方
+    if (type === "income") break;
     const line = lines[i];
     if (MERCHANT_KEYWORDS.test(line)) {
       const rest = line.replace(MERCHANT_KEYWORDS, "").trim();
@@ -206,6 +231,29 @@ export function guessCategory(text: string, merchant: string | null = null): str
   return bankCategory(text) ?? identifyMerchant(merchant)?.category ?? "其他支出";
 }
 
+/** 钱是进来还是出去：先看金额前面的 + / -，再看画面上的字 */
+export function findDirection(lines: string[]): TxType {
+  const signed = new RegExp(`^([+−–-])\\s*(?:(?:${TOKEN})\\s*${NUM}|${NUM}\\s*(?:${TOKEN}))`, "i");
+  for (const line of lines) {
+    const m = line.match(signed);
+    if (m) return m[1] === "+" ? "income" : "expense";
+  }
+  const text = lines.join("\n");
+  return INCOME_WORDS.test(text) && !EXPENSE_WORDS.test(text) ? "income" : "expense";
+}
+
+// 收入的分类：认得出的直接归，认不出就问（选过一次会记住这个人）
+const INCOME_RULES: [RegExp, string][] = [
+  [/salary|gaji|payroll|wages|薪水|薪资|工资|月薪/i, "工资"],
+  [/bonus|incentive|commission|花红|奖金|佣金/i, "奖金"],
+  [/dividend|interest|dividen|faedah|hibah|股息|利息|分红/i, "投资收益"],
+];
+
+export function guessIncome(text: string): { label: string; known: boolean } {
+  for (const [re, label] of INCOME_RULES) if (re.test(text)) return { label, known: true };
+  return { label: "其他收入", known: false };
+}
+
 function needsAsking(text: string, merchant: string | null): ParsedReceipt["ask"] {
   if (bankCategory(text)) return null; // 银行已经标了
   const known = identifyMerchant(merchant);
@@ -218,11 +266,26 @@ export function parseReceipt(text: string, today: Date = new Date()): ParsedRece
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
-  const rawMerchant = findMerchant(lines);
+  const type = findDirection(lines);
+  const rawMerchant = findMerchant(lines, type);
   // 认得的品牌换成干净的名字（“MCDONALDS-SS15 DT 1010349” → “McDonald's”）
   const merchant = identifyMerchant(rawMerchant)?.name ?? rawMerchant;
   const money = findMoney(lines);
+  if (type === "income") {
+    const income = guessIncome(text);
+    return {
+      type,
+      amount: money.main?.amount ?? null,
+      currency: money.main?.currency ?? "MYR",
+      original: money.original,
+      merchant,
+      categoryLabel: income.label,
+      ask: income.known ? null : "unknown",
+      occurredOn: findDate(text, today),
+    };
+  }
   return {
+    type,
     amount: money.main?.amount ?? null,
     currency: money.main?.currency ?? "MYR",
     original: money.original,
@@ -238,6 +301,7 @@ export function parseReceipt(text: string, today: Date = new Date()): ParsedRece
 // ======================================================================
 
 export type ListEntry = {
+  type: TxType;
   amount: number;
   merchant: string | null;
   categoryLabel: string;
@@ -247,8 +311,11 @@ export type ListEntry = {
 
 // 任何金额（不管正负）。MONEY_RE 带 g 旗标，.test() 会记住位置，所以这里另做一个不带 g 的。
 const ANY_MONEY_RE = new RegExp(MONEY_RE.source, "i");
-// 支出的金额前面有减号：“-RM 6.00”。收入（+RM）和没有符号的不算。
-const DEBIT_RE = new RegExp(`[-−–]\\s*(${TOKEN})\\s*(${NUM})|[-−–]\\s*(${NUM})\\s*(${TOKEN})(?![A-Za-z])`, "i");
+// 列表里每一笔的金额前面都有正负号：“-RM 6.00” 是支出，“+RM 50.00” 是进账。没有符号的不算。
+const SIGNED_RE = new RegExp(
+  `([-−–+])\\s*(${TOKEN})\\s*(${NUM})|([-−–+])\\s*(${NUM})\\s*(${TOKEN})(?![A-Za-z])`,
+  "i",
+);
 // 只有“单笔交易详情”才会出现的栏位：看到就不是列表
 const DETAIL_MARKERS =
   /^(reference id|transaction type|payment details|transaction no\.?|wallet ref|recipient reference|payment method|paid from|paid to|pay to)$/i;
@@ -261,7 +328,7 @@ const SUMMARY_RE = /total|spent|balance|baki|余额|available|总共|合计/i;
 /** 单独一行的日期标题：“Today”、“5 Oct 2026”、“Mon, 5 Oct”、“05/10/2026” */
 function headerDate(line: string, today: Date): string | null | undefined {
   const t = line.trim();
-  if (t.length > 26 || DEBIT_RE.test(t)) return undefined;
+  if (t.length > 26 || SIGNED_RE.test(t)) return undefined;
   const pad = (n: number) => String(n).padStart(2, "0");
   const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   if (/^(today|今天|hari ini)$/i.test(t)) return iso(today);
@@ -303,18 +370,24 @@ export function parseReceiptList(text: string, today: Date = new Date()): ListEn
     .filter(Boolean);
   if (lines.some((l) => DETAIL_MARKERS.test(l))) return null;
 
-  type Row = { index: number; amount: number; inline: string };
+  type Row = { index: number; amount: number; inline: string; type: TxType };
   const rows: Row[] = [];
   lines.forEach((line, index) => {
     if (SUMMARY_RE.test(line)) return;
-    const match = line.match(DEBIT_RE);
+    const match = line.match(SIGNED_RE);
     if (!match) return;
-    const currency = currencyCode(match[1] ?? match[4]);
+    const sign = match[1] ?? match[4];
+    const currency = currencyCode(match[2] ?? match[6]);
     if (currency !== "MYR") return;
-    const amount = toAmount(match[2] ?? match[3], currency);
+    const amount = toAmount(match[3] ?? match[5], currency);
     if (!Number.isFinite(amount) || amount <= 0) return;
     // 名字和金额在同一行的排版：“Setel   -RM 20.00”
-    rows.push({ index, amount, inline: line.slice(0, match.index).replace(/[\s·•|:-]+$/, "").trim() });
+    rows.push({
+      index,
+      amount,
+      type: sign === "+" ? "income" : "expense",
+      inline: line.slice(0, match.index).replace(/[\s·•|:-]+$/, "").trim(),
+    });
   });
   if (rows.length < 2) return null;
 
@@ -349,11 +422,23 @@ export function parseReceiptList(text: string, today: Date = new Date()): ListEn
   return rows.map((r, i) => {
     const raw = names[i];
     const known = identifyMerchant(raw);
+    if (r.type === "income") {
+      const income = guessIncome(raw ?? "");
+      return {
+        type: r.type,
+        amount: r.amount,
+        merchant: known?.name ?? raw,
+        categoryLabel: income.label,
+        ask: income.known ? null : ("unknown" as const),
+        occurredOn: dateAt(r.index),
+      };
+    }
     return {
+      type: r.type,
       amount: r.amount,
       merchant: known?.name ?? raw,
       categoryLabel: known?.category ?? "其他支出",
-      ask: !known ? "unknown" : known.askEveryTime ? "mixed" : null,
+      ask: !known ? ("unknown" as const) : known.askEveryTime ? ("mixed" as const) : null,
       occurredOn: dateAt(r.index),
     };
   });

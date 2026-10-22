@@ -58,9 +58,9 @@ export default async function HomePage() {
 
   // 截图记账时拿不准分类的那些：放在最上面让用户点一下
   const pending = (txs ?? []).filter((t) => t.needs_review || t.needs_account).slice(0, 5);
-  const choices = (categories ?? [])
-    .filter((c) => c.type === "expense")
-    .map((c) => ({ id: c.id, label: c.label_zh, icon: c.icon }));
+  // 支出用支出的分类，进账用收入的分类
+  const choicesFor = (type: string) =>
+    (categories ?? []).filter((c) => c.type === type).map((c) => ({ id: c.id, label: c.label_zh, icon: c.icon }));
 
   return (
     <>
@@ -72,11 +72,18 @@ export default async function HomePage() {
               <div key={t.id}>
                 <div className="mb-1.5 flex items-baseline justify-between gap-3">
                   <span className="truncate text-[15px] font-semibold">{t.merchant || "（没读到商家）"}</span>
-                  <span className="shrink-0 text-[15px] font-semibold text-rose-400">{rm(Number(t.amount))}</span>
+                  <span
+                    className={`shrink-0 text-[15px] font-semibold ${t.type === "income" ? "text-emerald-400" : "text-rose-400"}`}
+                  >
+                    {t.type === "income" ? "+" : ""}
+                    {rm(Number(t.amount))}
+                  </span>
                 </div>
                 {t.needs_account && (
                   <form action={setTransactionAccount.bind(null, t.id)} className="mb-2">
-                    <p className="mb-1 text-[11px] text-white/45">用哪个账户付的？</p>
+                    <p className="mb-1 text-[11px] text-white/45">
+                      {t.type === "income" ? "钱进了哪个账户？" : "用哪个账户付的？"}
+                    </p>
                     <div className="flex flex-wrap gap-1.5">
                       {(assets ?? []).map((a) => (
                         <button
@@ -94,9 +101,11 @@ export default async function HomePage() {
                 )}
                 {t.needs_review && (
                   <form action={updateTransactionCategory.bind(null, t.id)}>
-                    <p className="mb-1 text-[11px] text-white/45">这笔算哪一类？</p>
+                    <p className="mb-1 text-[11px] text-white/45">
+                      {t.type === "income" ? "这笔进账算哪一类？" : "这笔算哪一类？"}
+                    </p>
                     <div className="grid grid-cols-5 gap-1.5">
-                      {choices.map((c) => (
+                      {choicesFor(t.type).map((c) => (
                         <button
                           key={c.id}
                           type="submit"

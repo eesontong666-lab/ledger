@@ -358,6 +358,7 @@ grant execute on function public.remember_merchant_category(text, uuid) to authe
 -- 旧版本（参数比较少）要先删掉，否则会和新版并存、调用时分不清
 drop function if exists public.capture_transaction(text, numeric, text, text, date, text);
 drop function if exists public.capture_transaction(text, numeric, text, text, date, text, numeric, text);
+drop function if exists public.capture_transaction(text, numeric, text, text, date, text, numeric, text, boolean);
 
 create or replace function public.capture_transaction(
   p_token text,
@@ -368,7 +369,8 @@ create or replace function public.capture_transaction(
   p_raw_text text,
   p_original_amount numeric default null,
   p_original_currency text default null,
-  p_uncertain boolean default false
+  p_uncertain boolean default false,
+  p_type text default 'expense'
 )
 returns json
 language plpgsql
@@ -380,6 +382,8 @@ declare
   v_ask_account boolean;
   v_need_account boolean := false;
   v_accounts int;
+  v_type public.category_type := case when p_type = 'income' then 'income' else 'expense' end;
+  v_fallback text := case when p_type = 'income' then '其他收入' else '其他支出' end;
   v_category uuid;
   v_learned boolean := false;
   v_review boolean;
@@ -402,10 +406,9 @@ begin
     v_asset := null;
     select count(*) into v_accounts from public.assets where user_id = v_user;
     if v_accounts = 1 then
-      -- 只有一个账户，不用问
       select id into v_asset from public.assets where user_id = v_user;
     elsif v_accounts > 1 then
-      -- 截图上刚好只出现一个账户的名字（例如账户就叫 “Boost”、“Maybank”）→ 用它
+      -- 截图上刚好只出现一个账户的名字 → 用它
       select count(*), (array_agg(id))[1] into v_accounts, v_asset
       from public.assets
       where user_id = v_user and length(trim(name)) >= 4
@@ -417,23 +420,23 @@ begin
     end if;
   end if;
 
-  -- 用户以前改过这个商家的分类 → 直接用他选的
+  -- 用户以前给这个商家 / 这个人选过分类（同一种：支出看支出的，收入看收入的）
   if public.merchant_key(p_merchant) <> '' then
     select r.category_id into v_category
     from public.merchant_rules r
-    join public.categories c on c.id = r.category_id and c.type = 'expense'
+    join public.categories c on c.id = r.category_id and c.type = v_type
     where r.user_id = v_user and r.merchant_key = public.merchant_key(p_merchant);
     v_learned := v_category is not null;
   end if;
 
   if v_category is null then
     select id into v_category from public.categories
-    where type = 'expense' and label_zh = coalesce(p_category_label, '其他支出')
+    where type = v_type and label_zh = coalesce(p_category_label, v_fallback)
     limit 1;
   end if;
   if v_category is null then
     select id into v_category from public.categories
-    where type = 'expense' and label_zh = '其他支出' limit 1;
+    where type = v_type and label_zh = v_fallback limit 1;
   end if;
   select label_zh into v_label from public.categories where id = v_category;
 
@@ -443,20 +446,23 @@ begin
     (user_id, category_id, type, amount, occurred_on, note, merchant, asset_id, source, raw_text,
      original_amount, original_currency, needs_review, needs_account)
   values
-    (v_user, v_category, 'expense', round(p_amount, 2), coalesce(p_occurred_on, current_date),
+    (v_user, v_category, v_type, round(p_amount, 2), coalesce(p_occurred_on, current_date),
      null, nullif(trim(p_merchant), ''), v_asset, 'screenshot', left(p_raw_text, 4000),
      p_original_amount, nullif(upper(trim(p_original_currency)), ''), v_review, v_need_account)
   returning id into v_id;
 
+  -- 支出：账户余额减少；收入：账户余额增加
   if v_asset is not null then
-    update public.assets set balance = balance - round(p_amount, 2), updated_at = now()
-    where id = v_asset;
+    update public.assets
+      set balance = balance + (case when v_type = 'income' then 1 else -1 end) * round(p_amount, 2),
+          updated_at = now()
+      where id = v_asset;
   end if;
 
   update public.capture_tokens set last_used_at = now() where user_id = v_user;
 
   return json_build_object(
-    'id', v_id, 'category', v_label, 'learned', v_learned, 'needs_review', v_review,
+    'id', v_id, 'type', v_type, 'category', v_label, 'learned', v_learned, 'needs_review', v_review,
     'needs_account', v_need_account,
     'account', (select name from public.assets where id = v_asset),
     'accounts', case when v_need_account then
@@ -616,6 +622,7 @@ declare
   v_amount numeric;
   v_date date;
   v_merchant text;
+  v_type public.category_type;
   v_existing int;
   v_one json;
   v_results jsonb := '[]'::jsonb;
@@ -632,12 +639,13 @@ begin
     v_amount := round((v_item->>'amount')::numeric, 2);
     v_date := coalesce((v_item->>'date')::date, current_date);
     v_merchant := v_item->>'merchant';
+    v_type := case when v_item->>'type' = 'income' then 'income' else 'expense' end;
     if v_amount is null or v_amount <= 0 then
       continue;
     end if;
 
     select count(*) into v_existing from public.transactions
-    where user_id = v_user and type = 'expense' and occurred_on = v_date and amount = v_amount
+    where user_id = v_user and type = v_type and occurred_on = v_date and amount = v_amount
       and public.merchant_key(merchant) = public.merchant_key(v_merchant);
 
     if v_existing >= coalesce((v_item->>'nth')::int, 1) then
@@ -646,7 +654,7 @@ begin
     else
       v_one := public.capture_transaction(
         p_token, v_amount, v_merchant, v_item->>'category', v_date, p_raw_text,
-        null, null, coalesce((v_item->>'uncertain')::boolean, false));
+        null, null, coalesce((v_item->>'uncertain')::boolean, false), v_type::text);
       v_added := v_added + 1;
       v_results := v_results || (v_one::jsonb || jsonb_build_object('skipped', false));
     end if;
@@ -670,6 +678,7 @@ security definer set search_path = public
 as $$
 declare
   v_user uuid;
+  v_type public.category_type;
   v_category uuid;
   v_merchant text;
   v_key text;
@@ -680,19 +689,21 @@ begin
     raise exception 'invalid token' using errcode = '28000';
   end if;
 
+  select type into v_type from public.transactions where id = p_id and user_id = v_user;
+  if v_type is null then
+    raise exception 'transaction not found' using errcode = '22023';
+  end if;
+
   select id into v_category from public.categories
-  where type = 'expense' and label_zh = p_category_label limit 1;
+  where type = v_type and label_zh = p_category_label limit 1;
   if v_category is null then
     raise exception 'unknown category' using errcode = '22023';
   end if;
 
   update public.transactions
     set category_id = v_category, needs_review = false
-    where id = p_id and user_id = v_user and type = 'expense'
+    where id = p_id and user_id = v_user
     returning merchant into v_merchant;
-  if not found then
-    raise exception 'transaction not found' using errcode = '22023';
-  end if;
 
   v_key := public.merchant_key(v_merchant);
   if coalesce(p_remember, true) and v_key <> '' then
@@ -703,11 +714,11 @@ begin
 
     update public.transactions
       set category_id = v_category, needs_review = false
-      where user_id = v_user and type = 'expense' and public.merchant_key(merchant) = v_key
+      where user_id = v_user and type = v_type and public.merchant_key(merchant) = v_key
         and (category_id <> v_category or needs_review);
   end if;
 
-  return json_build_object('category', p_category_label, 'merchant', v_merchant);
+  return json_build_object('category', p_category_label, 'merchant', v_merchant, 'type', v_type);
 end;
 $$;
 
@@ -792,8 +803,8 @@ end;
 $$;
 
 -- ---------- 函数权限 ----------
-revoke all on function public.capture_transaction(text, numeric, text, text, date, text, numeric, text, boolean) from public;
-grant execute on function public.capture_transaction(text, numeric, text, text, date, text, numeric, text, boolean) to anon, authenticated;
+revoke all on function public.capture_transaction(text, numeric, text, text, date, text, numeric, text, boolean, text) from public;
+grant execute on function public.capture_transaction(text, numeric, text, text, date, text, numeric, text, boolean, text) to anon, authenticated;
 
 revoke all on function public.capture_transactions_bulk(text, jsonb, text) from public;
 grant execute on function public.capture_transactions_bulk(text, jsonb, text) to anon, authenticated;

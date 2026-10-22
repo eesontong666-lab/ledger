@@ -43,6 +43,7 @@ export function ParserTester() {
       {result && (
         <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
           {[
+            [en ? "Money" : "进 / 出", result.type === "income" ? (en ? "⬇︎ In" : "⬇︎ 进账") : en ? "⬆︎ Out" : "⬆︎ 支出"],
             [
               en ? "Amount" : "金额",
               !result.amount
@@ -51,7 +52,7 @@ export function ParserTester() {
                   ? rm(result.amount)
                   : `${formatForeign(result.amount, result.currency)} → RM`,
             ],
-            [en ? "Merchant" : "商家", result.merchant ?? "—"],
+            [result.type === "income" ? (en ? "From" : "来自") : en ? "Merchant" : "商家", result.merchant ?? "—"],
             [en ? "Category" : "分类", result.categoryLabel],
             [en ? "Date" : "日期", result.occurredOn ?? (en ? "Today" : "今天")],
           ].map(([k, v]) => (

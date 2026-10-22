@@ -397,6 +397,7 @@ export type Database = {
           p_raw_text: string
           p_token: string
           p_uncertain?: boolean
+          p_type?: string
         }
         Returns: Json
       }

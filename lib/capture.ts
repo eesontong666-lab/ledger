@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { parseReceipt, parseReceiptList, type ListEntry } from "@/lib/receiptParser";
+import { parseReceipt, parseReceiptList, type ListEntry, type TxType } from "@/lib/receiptParser";
 import { CATEGORY_CHOICES, categoryChoiceText, dayHeading, malaysiaNow, rm, todayISO } from "@/lib/mobile";
 import { formatForeign, rateToMYR } from "@/lib/fx";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
@@ -79,6 +79,7 @@ export async function handleCapture(request: Request, token: string | undefined)
     p_original_amount: original?.amount,
     p_original_currency: original?.currency,
     p_uncertain: parsed.ask !== null,
+    p_type: parsed.type,
   });
 
   if (error) {
@@ -88,20 +89,22 @@ export async function handleCapture(request: Request, token: string | undefined)
     return reply(500, `记账失败：${error.message}`);
   }
 
-  const who = parsed.merchant ? ` · ${parsed.merchant}` : "";
+  const income = parsed.type === "income";
+  const who = parsed.merchant ? ` · ${income ? "来自 " : ""}${parsed.merchant}` : "";
   const from = original ? `（${formatForeign(original.amount, original.currency)}）` : "";
   // 数据库可能用了“用户以前给这个商家选的分类”，以它返回的为准
   const result = (saved ?? {}) as SavedOne;
   const category = result.category ?? parsed.categoryLabel;
-  const summary = `${rm(amountMYR)}${from}${who}`;
+  const summary = `${income ? "+" : ""}${rm(amountMYR)}${from}${who}`;
+  const logged = income ? "✅ 已记收入" : "✅ 已记账";
   // 有好几个账户、又认不出是哪一个：让快捷指令弹出账户选单
-  const accountAsk = result.needs_account && result.id ? accountQuestion(result.id, result.accounts, summary) : {};
+  const accountAsk = result.needs_account && result.id ? accountQuestion(result.id, result.accounts, summary, parsed.type) : {};
   const tail = filedUnder;
 
   // 分类拿不准：这笔已经先记下了（暂时放在 category），同时让快捷指令弹出选单问用户。
   // 旧版快捷指令不认识 ask，只会显示 message；那笔会留在 App 首页的“还没分类”里等用户选。
   if (result.needs_review && result.id) {
-    return reply(200, `✅ 已记账 ${summary} · 还没分类${tail}`, {
+    return reply(200, `${logged} ${summary} · 还没分类${tail}`, {
       parsed,
       amountMYR,
       category,
@@ -109,16 +112,16 @@ export async function handleCapture(request: Request, token: string | undefined)
       ask: 1,
       id: result.id,
       remember: parsed.ask === "unknown" ? 1 : 0,
-      question: `${summary}\n这笔算哪一类？`,
+      question: `${summary}\n${income ? "这笔进账算哪一类？" : "这笔算哪一类？"}`,
       // 把猜的那一类放最前面，通常点第一个就对
-      choices: (await expenseChoices(supabase))
+      choices: (await categoryChoices(supabase, parsed.type))
         .sort((a, b) => Number(b.label === category) - Number(a.label === category))
         .map((c) => c.text),
     });
   }
 
   const into = result.account ? ` → ${result.account}` : "";
-  return reply(200, `✅ 已记账 ${summary} · ${category}${into}${tail}`, {
+  return reply(200, `${logged} ${summary} · ${category}${into}${tail}`, {
     parsed,
     amountMYR,
     category,
@@ -142,20 +145,22 @@ type SavedOne = {
 };
 
 /** 让快捷指令弹出“用哪个账户付的？”所需要的栏位。ids 可以是一个 id，或用逗号隔开的好几个。 */
-function accountQuestion(ids: string, accounts: string[] | null | undefined, what: string) {
+function accountQuestion(ids: string, accounts: string[] | null | undefined, what: string, type: TxType = "expense") {
   if (!accounts?.length) return {};
-  return { ask_account: 1, ids, account_question: `${what}\n用哪个账户付的？`, account_choices: accounts };
+  const question = type === "income" ? "钱进了哪个账户？" : "用哪个账户付的？";
+  return { ask_account: 1, ids, account_question: `${what}\n${question}`, account_choices: accounts };
 }
 
-/** 所有支出分类（包括用户自己加的），照顺序排好，附上选单要显示的文字 */
-async function expenseChoices(supabase: Db): Promise<{ label: string; text: string }[]> {
-  const { data } = await supabase
-    .from("categories")
-    .select("label_zh, icon, sort_order")
-    .eq("type", "expense")
-    .order("sort_order")
-    .order("label_zh");
-  const rows = data?.length ? data : CATEGORY_CHOICES.map((c) => ({ label_zh: c.label, icon: null }));
+/** 支出或收入的所有分类（包括用户自己加的），照顺序排好，附上选单要显示的文字。type 不给就两种都要。 */
+async function categoryChoices(supabase: Db, type?: TxType): Promise<{ label: string; text: string }[]> {
+  let query = supabase.from("categories").select("label_zh, icon, sort_order, type");
+  if (type) query = query.eq("type", type);
+  const { data } = await query.order("sort_order").order("label_zh");
+  const rows = data?.length
+    ? data
+    : type === "income"
+      ? [{ label_zh: "其他收入", icon: null }]
+      : CATEGORY_CHOICES.map((c) => ({ label_zh: c.label, icon: null }));
   return rows.map((c) => ({ label: c.label_zh, text: categoryChoiceText(c.label_zh, c.icon) }));
 }
 
@@ -170,10 +175,18 @@ async function captureList(supabase: Db, token: string, text: string, list: List
   const seen = new Map<string, number>();
   const items = list.map((e) => {
     const date = e.occurredOn ?? today;
-    const key = `${date}|${e.amount.toFixed(2)}|${merchantKey(e.merchant)}`;
+    const key = `${e.type}|${date}|${e.amount.toFixed(2)}|${merchantKey(e.merchant)}`;
     const nth = (seen.get(key) ?? 0) + 1;
     seen.set(key, nth);
-    return { amount: e.amount, merchant: e.merchant ?? "", category: e.categoryLabel, date, uncertain: e.ask !== null, nth };
+    return {
+      type: e.type,
+      amount: e.amount,
+      merchant: e.merchant ?? "",
+      category: e.categoryLabel,
+      date,
+      uncertain: e.ask !== null,
+      nth,
+    };
   });
 
   const { data, error } = await supabase.rpc("capture_transactions_bulk", {
@@ -196,15 +209,20 @@ async function captureList(supabase: Db, token: string, text: string, list: List
   }
 
   const rows = (result.results ?? []).map((r, i) => ({ ...r, item: items[i] })).filter((r) => r.item && !r.skipped);
-  const total = rows.reduce((sum, r) => sum + r.item.amount, 0);
+  const spent = rows.filter((r) => r.item.type === "expense").reduce((sum, r) => sum + r.item.amount, 0);
+  const received = rows.filter((r) => r.item.type === "income").reduce((sum, r) => sum + r.item.amount, 0);
+  const totals = [spent > 0 ? `支出 ${rm(spent)}` : "", received > 0 ? `收入 +${rm(received)}` : ""].filter(Boolean).join("，");
   const pending = rows.filter((r) => r.needs_review).length;
   const shown = rows
     .slice(0, 4)
-    .map((r) => `· ${rm(r.item.amount)} ${r.item.merchant || "（没读到商家）"} · ${(r.category ?? r.item.category).replace("支出", "")}`);
+    .map(
+      (r) =>
+        `· ${r.item.type === "income" ? "+" : ""}${rm(r.item.amount)} ${r.item.merchant || "（没读到商家）"} · ${(r.category ?? r.item.category).replace("支出", "").replace("收入", "")}`,
+    );
   if (rows.length > shown.length) shown.push(`…还有 ${rows.length - shown.length} 笔`);
 
   const head =
-    `✅ 记了 ${added} 笔，共 ${rm(total)}` +
+    `✅ 记了 ${added} 笔：${totals}` +
     (skipped > 0 ? `（跳过 ${skipped} 笔已经记过的）` : "") +
     (pending > 0 ? `。${pending} 笔还没分类，打开 App 选一下` : "");
   // 这张截图里的几笔要一起问“用哪个账户付的”
@@ -213,7 +231,9 @@ async function captureList(supabase: Db, token: string, text: string, list: List
     ? accountQuestion(
         needAccount.map((r) => r.id).join(","),
         needAccount[0].accounts,
-        `${needAccount.length} 笔，共 ${rm(needAccount.reduce((sum, r) => sum + r.item.amount, 0))}`,
+        `${needAccount.length} 笔`,
+        // 一张截图里同时有进有出时，问法用“用哪个账户”就好；全是进账才问“钱进了哪个账户”
+        needAccount.every((r) => r.item.type === "income") ? "income" : "expense",
       )
     : {};
   return reply(200, [head, ...shown].join("\n"), { added, skipped, pending, ...accountAsk });
@@ -231,7 +251,7 @@ export async function handleSetCategory(request: Request, token: string | undefi
 
   const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } });
   const picked = String(body.category ?? "").trim();
-  const all = await expenseChoices(supabase);
+  const all = await categoryChoices(supabase);
   // 先找完全一样的；找不到再看选的那串字里包含哪个分类名（名字长的先比，免得“食”抢了“零食”）
   const choice =
     all.find((c) => c.text === picked || c.label === picked) ??

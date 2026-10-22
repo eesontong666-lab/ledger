@@ -5,7 +5,7 @@ A phone-only bookkeeping app for iPhone: double-tap the back of the phone on a p
 手机专用的记账 App：在付款成功的画面轻点 iPhone 背面两下，就自动记一笔。每个人有自己独立的一套，资料只属于自己，免费。
 
 - 🔒 只用一个 6 位密码进入 / one 6-digit passcode, no email login
-- 📸 截图自动记账（金额、商家、分类）/ screenshot logging via an iPhone Shortcut
+- 📸 截图自动记账（金额、商家、分类），钱进来的画面会记成收入 / screenshot logging for money out and money in
 - 🧠 认得常见商家（McDonald's、Petronas、Grab…），认不出时弹出选单问你，选过一次就记住 / recognises common merchants, asks when unsure, remembers your answer
 - 🧾 一张截图里有好几笔交易（银行的活动列表）也能一次记下，不会重复 / one screenshot of your activity list logs every expense in it
 - 🏷️ 分类可以自己加 / add your own categories
