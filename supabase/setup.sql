@@ -152,6 +152,9 @@ alter table public.transactions
   add column if not exists original_currency text,
   add column if not exists needs_review boolean not null default false,
   add column if not exists needs_account boolean not null default false;
+alter table public.capture_tokens
+  add column if not exists income_asset_id uuid references public.assets(id) on delete set null;
+
 -- ask_account 是后来才加的。升级时，原本已经选好固定账户的人保持原样，不要突然开始问。
 do $$ begin
   if not exists (select 1 from information_schema.columns
@@ -380,6 +383,7 @@ declare
   v_user uuid;
   v_asset uuid;
   v_ask_account boolean;
+  v_income_asset uuid;
   v_need_account boolean := false;
   v_accounts int;
   v_type public.category_type := case when p_type = 'income' then 'income' else 'expense' end;
@@ -390,7 +394,7 @@ declare
   v_label text;
   v_id uuid;
 begin
-  select user_id, default_asset_id, ask_account into v_user, v_asset, v_ask_account
+  select user_id, default_asset_id, ask_account, income_asset_id into v_user, v_asset, v_ask_account, v_income_asset
   from public.capture_tokens
   where token_hash = encode(extensions.digest(p_token, 'sha256'), 'hex');
 
@@ -400,24 +404,6 @@ begin
 
   if p_amount is null or p_amount <= 0 then
     raise exception 'invalid amount' using errcode = '22023';
-  end if;
-
-  if v_ask_account then
-    v_asset := null;
-    select count(*) into v_accounts from public.assets where user_id = v_user;
-    if v_accounts = 1 then
-      select id into v_asset from public.assets where user_id = v_user;
-    elsif v_accounts > 1 then
-      -- 截图上刚好只出现一个账户的名字 → 用它
-      select count(*), (array_agg(id))[1] into v_accounts, v_asset
-      from public.assets
-      where user_id = v_user and length(trim(name)) >= 4
-        and position(lower(trim(name)) in lower(coalesce(p_raw_text, ''))) > 0;
-      if v_accounts <> 1 then
-        v_asset := null;
-        v_need_account := true;
-      end if;
-    end if;
   end if;
 
   -- 用户以前给这个商家 / 这个人选过分类（同一种：支出看支出的，收入看收入的）
@@ -439,6 +425,31 @@ begin
     where type = v_type and label_zh = v_fallback limit 1;
   end if;
   select label_zh into v_label from public.categories where id = v_category;
+
+  if v_ask_account then
+    v_asset := null;
+    select count(*) into v_accounts from public.assets where user_id = v_user;
+    if v_accounts = 1 then
+      select id into v_asset from public.assets where user_id = v_user;
+    elsif v_accounts > 1 then
+      -- 截图上刚好只出现一个账户的名字 → 用它
+      select count(*), (array_agg(id))[1] into v_accounts, v_asset
+      from public.assets
+      where user_id = v_user and length(trim(name)) >= 4
+        and position(lower(trim(name)) in lower(coalesce(p_raw_text, ''))) > 0;
+      if v_accounts <> 1 then
+        v_asset := null;
+        v_need_account := true;
+      end if;
+    end if;
+  end if;
+
+  -- 进账（别人转钱给你、退款…）有自己的默认账户时，直接存进那里，不用问。
+  -- 工资除外：工资通常要按比例分进好几个账户，照付款的方式处理。
+  if v_type = 'income' and v_income_asset is not null and v_label is distinct from '工资' then
+    v_asset := v_income_asset;
+    v_need_account := false;
+  end if;
 
   v_review := coalesce(p_uncertain, false) and not v_learned;
 

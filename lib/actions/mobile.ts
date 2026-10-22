@@ -391,6 +391,17 @@ export async function updateTransactionDetails(id: string, formData: FormData) {
   revalidatePath(`/tx/${id}`);
 }
 
+/** 截图记到的进账（别人转钱给你、退款）存到哪个账户；空 = 跟付款的设定一样 */
+export async function setCaptureIncomeAccount(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase
+    .from("capture_tokens")
+    .update({ income_asset_id: (formData.get("asset_id") as string) || null })
+    .eq("user_id", user.id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings/automation");
+}
+
 export async function setCaptureDefaultAccount(formData: FormData) {
   const { supabase, user } = await requireUser();
   // ASK_ACCOUNT = 每次都问；空 = 不记到任何账户；其他 = 固定记到这个账户

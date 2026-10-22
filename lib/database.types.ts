@@ -85,6 +85,7 @@ export type Database = {
           ask_account: boolean
           created_at: string
           default_asset_id: string | null
+          income_asset_id: string | null
           last_used_at: string | null
           token_hash: string
           user_id: string
@@ -93,6 +94,7 @@ export type Database = {
           ask_account?: boolean
           created_at?: string
           default_asset_id?: string | null
+          income_asset_id?: string | null
           last_used_at?: string | null
           token_hash: string
           user_id: string
@@ -101,6 +103,7 @@ export type Database = {
           ask_account?: boolean
           created_at?: string
           default_asset_id?: string | null
+          income_asset_id?: string | null
           last_used_at?: string | null
           token_hash?: string
           user_id?: string

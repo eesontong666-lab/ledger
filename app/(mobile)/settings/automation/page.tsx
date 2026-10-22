@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { setCaptureDefaultAccount } from "@/lib/actions/mobile";
+import { setCaptureDefaultAccount, setCaptureIncomeAccount } from "@/lib/actions/mobile";
 import { BackHeader, Panel, SectionLabel, fieldClass, pinkButton, primaryButton } from "@/components/mobile/ui";
 import { LangProvider, LangToggle, T } from "@/components/mobile/lang";
 import { TokenPanel } from "@/components/mobile/TokenPanel";
@@ -27,7 +27,7 @@ export default async function AutomationPage() {
   const basicFileUrl = `${origin}/${encodeURIComponent("Ledger Screenshot Basic.shortcut")}`;
 
   const [{ data: token }, { data: assets }] = await Promise.all([
-    supabase.from("capture_tokens").select("created_at, last_used_at, default_asset_id, ask_account").maybeSingle(),
+    supabase.from("capture_tokens").select("created_at, last_used_at, default_asset_id, ask_account, income_asset_id").maybeSingle(),
     supabase.from("assets").select("id, name").order("created_at"),
   ]);
 
@@ -204,6 +204,31 @@ export default async function AutomationPage() {
               <T
                 zh="「每次都问我」：记账后手机会弹出你的账户让你点是用哪一个付的（只有一个账户时不会问）。选固定的账户：每笔都自动从那个账户扣。"
                 en="“Ask me every time”: after logging, a menu lists your accounts so you can tap the one you paid with (not asked if you have only one). A fixed account: every entry is deducted from it automatically."
+              />
+            </p>
+          </Panel>
+
+          <SectionLabel>
+            <T zh="进账存到哪个账户" en="Where money coming in goes" />
+          </SectionLabel>
+          <Panel className="p-4">
+            <form action={setCaptureIncomeAccount} className="flex gap-2">
+              <select name="asset_id" defaultValue={token.income_asset_id ?? ""} className={fieldClass}>
+                <option value="">跟上面一样 / Same as above</option>
+                {(assets ?? []).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className={`${pinkButton} shrink-0`}>
+                <T zh="保存" en="Save" />
+              </button>
+            </form>
+            <p className="mt-2 text-xs leading-relaxed text-white/40">
+              <T
+                zh="截图到别人转钱给你、退款这些进账时，钱存进这个账户，不会再问。工资不跟这条：工资照上面付款的设定处理。"
+                en="When a screenshot shows money coming in (someone paying you back, a refund), it goes into this account without asking. Salary is the exception and follows the setting above."
               />
             </p>
           </Panel>
